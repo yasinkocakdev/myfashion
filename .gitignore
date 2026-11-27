@@ -1,6 +1,6 @@
 # Kişisel fotoğraflar, indirilen medya ve analiz çıktıları: asla GitHub'a gitmez
-data/
-output/
+/data/
+/output/
 *.mp4
 *.mov
 
