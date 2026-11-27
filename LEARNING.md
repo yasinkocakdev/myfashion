@@ -89,3 +89,24 @@ Projedeki önemli kararların kısa notları. Her not: **bu neydi, neden böyle 
   - Veri klasörü `700` izinlidir; başkasının fotoğraflarını bilgisayardaki başka kullanıcılar okuyamaz.
   - Model çıktısı ve açıklamalar Blazor tarafından otomatik kodlanır. Testte `<script>` marka adı metin olarak görünür, çalışmaz.
 - **Erişilebilirlik:** Sayfanın başında "İçeriğe geç" linki var. Her form alanının bir `label`'ı var, hatalar `aria-describedby` ile alana bağlı. Renk paletinin metin karşılığı var (`role="img"` + `aria-label`). Görsellerin `alt` metni kişiyi değil kıyafeti anlatır. Yeni sekmede açılan linkler `rel="noopener noreferrer"` kullanır ve bunu ekran okuyucuya söyler.
+
+## 13. Performans: önce ölç (`chore(bench): add an analysis benchmark tool`)
+
+- **Tahminle değil ölçümle iyileştirilir.** `tools/MyFashion.Bench`, gerçek akışı sabit bir veri setiyle çalıştırır ve her aşamanın süresini ölçer. Ürün koduna dokunmadan, `IMediaToolkit` ve `IVisionAnalyzer`'ı saran zamanlama dekoratörleriyle (Decorator deseni) yapar bunu. Arayüzlerle kurulan mimarinin bir faydası da bu: Ölçüm için kodu değiştirmek gerekmiyor.
+- **"Önce" ölçümü eski commit'ten alınır.** `git worktree` ile değişiklikten önceki commit ayrı bir klasöre açılıp orada ölçülür. Rakamlar gerçekten eski koddan gelir.
+- **Ölçüm bir hatayı ortaya çıkardı:** `qwen3-vl:8b` etiketi modelin "düşünen" sürümüymüş. `think: false` ayarına rağmen her görsel için gizli bir düşünme metni üretiyor, yani token'ların çoğu boşa gidiyor. Ders: Bir ayarın gerçekten uygulandığını kontrol et (`ollama show` şablonu, yanıttaki `thinking` alanı ve `eval_count`).
+
+## 14. Tek ffmpeg süreci ve örtüşen akış (`perf(media): ...`, `perf(app): ...`)
+
+- **Süreç açmak pahalıdır.** Eskiden her görsel için iki ffmpeg süreci açılıyordu (küçült, sonra hash), videoda ise her kare için ayrı bir hash süreci. Artık ffmpeg'in `split` filtresiyle tek süreç hem JPEG'i hem 9x8 gri pikselleri üretiyor; görsel bir kez çözülüyor (decode).
+- **Üretici-tüketici (producer-consumer):** Model bir görseli analiz ederken ffmpeg sıradaki dosyayı hazırlar. Aradaki `Channel` sınırlıdır (kapasite 4): Hazırlık modelden çok öne geçip diski ve belleği doldurmaz (back-pressure). Tek üretici ve tek tüketici olduğu için sıra korunur.
+- **Paylaşılan sayaçlar** artık iki görevden birden güncelleniyor. Bu yüzden `lock` ile korunan değiştirilemez bir `RunCounts` kaydı tutuluyor; okuyan taraf hiçbir zaman yarım güncellenmiş bir sayı görmez.
+- **Eşzamanlılık testi zamana değil el sıkışmaya dayanır:** Sahte model, ikinci dosyanın hazırlanmaya başlamasını bekler. Kod sıralı çalışsaydı bu bekleme hiç bitmezdi. "Şu kadar milisaniyeden hızlı mı?" diye bakan testler makineye göre bazen geçer bazen kalır (flaky); bu yaklaşım öyle olmaz.
+
+## 15. Instagram resmi API (`feat(instagram): ...`, `feat(web): ...`, `docs(instagram): ...`)
+
+- **Resmi yol:** Business Discovery, başka bir İşletme/Creator hesabının postlarını, kendi profesyonel hesabının erişim anahtarıyla okur. Giriş taklidi ya da kazıma yok, dolayısıyla hesap kısıtlama riski de yok.
+- **Anahtar URL'de değil başlıkta (`Authorization: Bearer`) gider.** URL'ler loglara, tarayıcı geçmişine ve proxy kayıtlarına düşer; başlıklar düşmez. `InstagramCredentials.ToString()` da anahtarı yıldızla gizler, çünkü record'lar varsayılan olarak bütün alanlarını yazdırır.
+- **Data Protection** anahtarı şifreler. Dosya `600` izinli, klasör `700`. Arayüz anahtarı bir daha göstermez, sadece "bağlı" der.
+- **SSRF koruması:** API'nin verdiği medya adresine körü körüne istek atılmaz. Yalnızca https, varsayılan port ve `*.cdninstagram.com` / `*.fbcdn.net` kabul edilir. Yönlendirmeler kapalıdır; açık olsaydı izinli bir adres isteği başka bir host'a yönlendirebilirdi. Boyut 50 MB ile sınırlıdır.
+- **Sonsuz döngüye karşı:** API aynı sayfa işaretini (cursor) tekrar döndürürse çekme durur. Bunu bir test yakaladı.

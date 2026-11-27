@@ -85,7 +85,7 @@ public sealed class OllamaRecommendationGenerator(OllamaChatClient client, Ollam
         {
             try
             {
-                var content = await client.ChatAsync(options.VisionModel, messages, Schema, cancellationToken).ConfigureAwait(false);
+                var content = await client.ChatAsync(options.VisionModel, messages, Schema, options.MaxRecommendationTokens, cancellationToken).ConfigureAwait(false);
                 return RecommendationParser.Parse(content, preferences.Stores);
             }
             catch (OllamaException ex) when (ex.IsTransient)

@@ -43,13 +43,9 @@ public sealed class InstagramApiMediaSource(
                 }
 
                 var path = Path.Combine(folder, part.Id + (type == MediaFileType.Video ? ".mp4" : ".jpg"));
-                if (!File.Exists(path))
+                if (!File.Exists(path) && !await TryDownloadAsync(url, path, cancellationToken).ConfigureAwait(false))
                 {
-                    var ok = await DownloadAsync(url, path, cancellationToken).ConfigureAwait(false);
-                    if (!ok)
-                    {
-                        continue;
-                    }
+                    continue;
                 }
 
                 yield return new MediaFile(path, type, kind, item.Caption, item.Timestamp, part.Id);
@@ -69,6 +65,20 @@ public sealed class InstagramApiMediaSource(
         && AllowedHostSuffixes.Any(suffix => url.Host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsSafeId(string id) => id.Length is > 0 and <= 40 && id.All(char.IsAsciiDigit);
+
+    /// <summary>One failed download (network blip, CDN error, timeout) skips that file instead of failing the whole analysis.</summary>
+    private async Task<bool> TryDownloadAsync(Uri url, string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await DownloadAsync(url, path, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException
+                                   || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            return false;
+        }
+    }
 
     private async Task<bool> DownloadAsync(Uri url, string path, CancellationToken cancellationToken)
     {

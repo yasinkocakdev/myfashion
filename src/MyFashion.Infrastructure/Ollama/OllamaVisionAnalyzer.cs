@@ -40,7 +40,7 @@ public sealed class OllamaVisionAnalyzer(OllamaChatClient client, OllamaOptions 
         {
             try
             {
-                var content = await client.ChatAsync(options.VisionModel, messages, Schema, cancellationToken).ConfigureAwait(false);
+                var content = await client.ChatAsync(options.VisionModel, messages, Schema, options.MaxAnalysisTokens, cancellationToken).ConfigureAwait(false);
                 return ModelOutputParser.Parse(content);
             }
             catch (OllamaException ex) when (ex.IsTransient)

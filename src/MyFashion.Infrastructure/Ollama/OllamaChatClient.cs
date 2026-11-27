@@ -57,7 +57,12 @@ public sealed class OllamaChatClient
     }
 
     /// <summary>Sends one non-streaming chat request and returns the assistant's message content.</summary>
-    public async Task<string> ChatAsync(string model, IReadOnlyList<OllamaMessage> messages, JsonNode format, CancellationToken cancellationToken)
+    /// <param name="model">Model name.</param>
+    /// <param name="messages">Chat messages.</param>
+    /// <param name="format">JSON schema the answer must follow.</param>
+    /// <param name="maxTokens">Upper limit of generated tokens (Ollama <c>num_predict</c>).</param>
+    /// <param name="cancellationToken">Cancels the request.</param>
+    public async Task<string> ChatAsync(string model, IReadOnlyList<OllamaMessage> messages, JsonNode format, int maxTokens, CancellationToken cancellationToken)
     {
         var body = new
         {
@@ -67,7 +72,7 @@ public sealed class OllamaChatClient
             stream = false,
             think = false,
             keep_alive = _options.KeepAlive,
-            options = new { temperature = 0 },
+            options = new { temperature = 0, num_predict = maxTokens },
         };
 
         using var timeout = new CancellationTokenSource(_options.RequestTimeout);
