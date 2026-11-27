@@ -70,3 +70,9 @@ Projedeki önemli kararların kısa notları. Her not: **bu neydi, neden böyle 
 - **Eşitlik bozulmalarında `ThenBy`:** İki renk aynı sayıda geçiyorsa sıra rastgele olmasın diye ikinci bir sıralama ölçütü (isim) eklenir. Böylece rapor her açılışta aynı görünür, testler de kararlı olur.
 - **Gürültü filtresi:** Güveni 0.3'ün altındaki parçalar sayılmaz. İmza parça için en az 2 tekrar, kombin formülü için en az 2 görsel gerekir. Tek seferlik bir şey "tarz" değildir.
 - **Kombin formülü** bir görseldeki ana parçaların (dış giyim, üst, elbise, alt, ayakkabı) renk ve kategori dizisidir; örneğin "black top + denim bottom + white footwear". Aksesuarlar formüle girmez, yoksa her şapka yeni bir formül yaratırdı.
+
+## 11. Öneriler (`feat(recommendations): ...`)
+
+- **Linkleri model değil kod üretir (`StoreCatalog`).** Model sadece "ne aranacağını" söyler. O metin harf, rakam ve tire dışındaki her şeyden temizlenir, URL için kodlanır (`Uri.EscapeDataString`) ve izin listesindeki sabit mağaza şablonlarına yerleştirilir. Model `https://kotu-site` yazsa bile bu adres link olmaz, sadece arama kelimesine dönüşür. Kullanıcının tıklayacağı her şeyin kaynağına güvenebilmek gerekir.
+- **`ProfilePromptWriter`**, binlerce parçalık analizi modele ham hâliyle göndermek yerine birkaç satırlık özet hâlinde verir: palet, kategoriler, markalar, formüller. Kısa ve net girdi hem daha hızlı hem daha tutarlı cevap getirir.
+- **Testin yakaladığı hata:** Model `search_query` alanını `""` olarak döndürdüğünde `?? name` çalışmıyordu, çünkü `??` sadece `null` için devreye girer, boş metin için değil. Çözüm, temizlenmiş sorgunun uzunluğuna bakmak oldu.
