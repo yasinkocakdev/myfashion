@@ -77,6 +77,7 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseSecurityHeaders();
+app.UseSameOriginGuard();
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseAntiforgery();
 
