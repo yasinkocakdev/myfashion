@@ -165,20 +165,20 @@ public sealed class AnalysisRunnerTests : IDisposable
 
     private sealed class FakeToolkit : IMediaToolkit
     {
-        public Task<IReadOnlyList<string>> ExtractFramesAsync(string videoPath, string outputDirectory, CancellationToken cancellationToken)
+        public Task<IReadOnlyList<PreparedImage>> ExtractFramesAsync(string videoPath, string outputDirectory, CancellationToken cancellationToken)
         {
             Directory.CreateDirectory(outputDirectory);
             var frames = File.ReadAllText(videoPath).Split('|');
-            var paths = frames.Select((frame, i) =>
+            var prepared = frames.Select((frame, i) =>
             {
                 var path = Path.Combine(outputDirectory, $"frame_{i + 1:D4}.jpg");
                 File.WriteAllText(path, frame);
-                return path;
+                return new PreparedImage(path, Hash(frame));
             }).ToList();
-            return Task.FromResult<IReadOnlyList<string>>(paths);
+            return Task.FromResult<IReadOnlyList<PreparedImage>>(prepared);
         }
 
-        public Task NormalizeImageAsync(string imagePath, string outputPath, CancellationToken cancellationToken)
+        public Task<PreparedImage> PrepareImageAsync(string imagePath, string outputPath, CancellationToken cancellationToken)
         {
             var content = File.ReadAllText(imagePath);
             if (content == "corrupt")
@@ -188,11 +188,10 @@ public sealed class AnalysisRunnerTests : IDisposable
 
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
             File.WriteAllText(outputPath, content);
-            return Task.CompletedTask;
+            return Task.FromResult(new PreparedImage(outputPath, Hash(content)));
         }
 
-        public Task<ulong> ComputeDHashAsync(string imagePath, CancellationToken cancellationToken) =>
-            Task.FromResult(ulong.Parse(Field(File.ReadAllText(imagePath), "hash"), CultureInfo.InvariantCulture));
+        private static ulong Hash(string script) => ulong.Parse(Field(script, "hash"), CultureInfo.InvariantCulture);
     }
 
     private sealed class FakeAnalyzer : IVisionAnalyzer

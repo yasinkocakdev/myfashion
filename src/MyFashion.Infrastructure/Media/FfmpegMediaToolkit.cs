@@ -23,74 +23,89 @@ public sealed record MediaToolkitOptions
     public TimeSpan Timeout { get; init; } = TimeSpan.FromMinutes(5);
 }
 
-/// <summary>Frame extraction, resizing and hashing with ffmpeg (and macOS <c>sips</c> as a HEIC fallback).</summary>
+/// <summary>
+/// Resizing, frame extraction and hashing with ffmpeg (and macOS <c>sips</c> as a HEIC fallback).
+/// One ffmpeg process produces both the JPEG(s) and the 9x8 grayscale pixels for the hash:
+/// the decoded picture is split into two branches, so nothing is decoded twice.
+/// </summary>
 public sealed class FfmpegMediaToolkit(IProcessRunner runner, MediaToolkitOptions options) : IMediaToolkit
 {
     private const string SipsPath = "/usr/bin/sips";
+    private const int HashBytes = DHash.Width * DHash.Height;
 
     private readonly string _ffmpeg = ToolLocator.Find("ffmpeg", options.FfmpegPath)
         ?? throw new ExternalToolException("ffmpeg bulunamadı. Kurulum: brew install ffmpeg");
 
-    private string ScaleFilter => string.Create(
+    private string Scale => string.Create(
         CultureInfo.InvariantCulture,
         $"scale='min({options.MaxImageSide},iw)':'min({options.MaxImageSide},ih)':force_original_aspect_ratio=decrease");
 
-    public async Task<IReadOnlyList<string>> ExtractFramesAsync(string videoPath, string outputDirectory, CancellationToken cancellationToken)
+    private static string HashBranch => $"scale={DHash.Width}:{DHash.Height}:flags=area,format=gray";
+
+    public async Task<IReadOnlyList<PreparedImage>> ExtractFramesAsync(string videoPath, string outputDirectory, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(outputDirectory);
         var fps = string.Create(CultureInfo.InvariantCulture, $"fps=1/{options.FrameIntervalSeconds}");
-        var pattern = Path.Combine(outputDirectory, "frame_%04d.jpg");
+        var maxFrames = options.MaxFramesPerVideo.ToString(CultureInfo.InvariantCulture);
 
-        await RunFfmpegAsync(
+        var pixels = await RunFfmpegAsync(
             [
                 "-i", videoPath,
-                "-vf", $"{fps},{ScaleFilter}",
-                "-frames:v", options.MaxFramesPerVideo.ToString(CultureInfo.InvariantCulture),
-                "-q:v", "3",
-                pattern,
+                "-filter_complex", $"[0:v]{fps},{Scale},split=2[jpg][h];[h]{HashBranch}[gray]",
+                "-map", "[jpg]", "-frames:v", maxFrames, "-q:v", "3", Path.Combine(outputDirectory, "frame_%04d.jpg"),
+                "-map", "[gray]", "-frames:v", maxFrames, "-f", "rawvideo", "-pix_fmt", "gray", "pipe:1",
             ],
             cancellationToken).ConfigureAwait(false);
 
-        return Directory.EnumerateFiles(outputDirectory, "frame_*.jpg").Order(StringComparer.Ordinal).ToList();
+        var frames = Directory.EnumerateFiles(outputDirectory, "frame_*.jpg").Order(StringComparer.Ordinal).ToList();
+        if (pixels.Length != frames.Count * HashBytes)
+        {
+            throw new ExternalToolException($"ffmpeg beklenmeyen çıktı üretti: {frames.Count} kare, {pixels.Length} bayt hash verisi.");
+        }
+
+        return [.. frames.Select((path, i) => new PreparedImage(path, DHash.FromGrayPixels(pixels.AsSpan(i * HashBytes, HashBytes))))];
     }
 
-    public async Task NormalizeImageAsync(string imagePath, string outputPath, CancellationToken cancellationToken)
+    public async Task<PreparedImage> PrepareImageAsync(string imagePath, string outputPath, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-        try
+        var source = imagePath;
+        if (IsHeic(imagePath) && File.Exists(SipsPath))
         {
-            await RunFfmpegAsync(["-i", imagePath, "-vf", ScaleFilter, "-frames:v", "1", "-q:v", "3", outputPath], cancellationToken)
+            // Many ffmpeg builds cannot decode HEIC (iPhone photos); macOS can. Convert first, then continue as JPEG.
+            source = outputPath + ".heic.jpg";
+            var converted = await runner.RunAsync(SipsPath, ["-s", "format", "jpeg", imagePath, "--out", source], options.Timeout, cancellationToken)
                 .ConfigureAwait(false);
-        }
-        catch (ExternalToolException) when (IsHeic(imagePath) && File.Exists(SipsPath))
-        {
-            // Some ffmpeg builds cannot decode HEIC (iPhone photos); macOS can.
-            var result = await runner.RunAsync(
-                SipsPath,
-                ["-s", "format", "jpeg", "-Z", options.MaxImageSide.ToString(CultureInfo.InvariantCulture), imagePath, "--out", outputPath],
-                options.Timeout,
-                cancellationToken).ConfigureAwait(false);
-            if (result.ExitCode != 0 || !File.Exists(outputPath))
+            if (converted.ExitCode != 0 || !File.Exists(source))
             {
                 throw new ExternalToolException($"HEIC görsel dönüştürülemedi: {Path.GetFileName(imagePath)}");
             }
         }
-    }
 
-    public async Task<ulong> ComputeDHashAsync(string imagePath, CancellationToken cancellationToken)
-    {
-        var pixels = await RunFfmpegAsync(
-            [
-                "-i", imagePath,
-                "-vf", $"scale={DHash.Width}:{DHash.Height}:flags=area,format=gray",
-                "-frames:v", "1",
-                "-f", "rawvideo",
-                "-pix_fmt", "gray",
-                "pipe:1",
-            ],
-            cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var pixels = await RunFfmpegAsync(
+                [
+                    "-i", source,
+                    "-filter_complex", $"[0:v]{Scale},split=2[jpg][h];[h]{HashBranch}[gray]",
+                    "-map", "[jpg]", "-frames:v", "1", "-q:v", "3", outputPath,
+                    "-map", "[gray]", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray", "pipe:1",
+                ],
+                cancellationToken).ConfigureAwait(false);
 
-        return DHash.FromGrayPixels(pixels);
+            return new PreparedImage(outputPath, DHash.FromGrayPixels(pixels));
+        }
+        catch (ArgumentException ex)
+        {
+            throw new ExternalToolException($"Görsel okunamadı: {Path.GetFileName(imagePath)}", ex);
+        }
+        finally
+        {
+            if (!ReferenceEquals(source, imagePath))
+            {
+                File.Delete(source);
+            }
+        }
     }
 
     private async Task<byte[]> RunFfmpegAsync(IEnumerable<string> arguments, CancellationToken cancellationToken)

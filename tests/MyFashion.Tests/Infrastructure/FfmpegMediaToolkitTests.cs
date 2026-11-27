@@ -29,9 +29,28 @@ public sealed class FfmpegMediaToolkitTests : IDisposable
         var frames = await toolkit.ExtractFramesAsync(video, Path.Combine(_dir, "kareler"), TestContext.Current.CancellationToken);
 
         Assert.InRange(frames.Count, 5, 6);
-        var (width, height) = await SizeAsync(frames[0]);
+        Assert.All(frames, f => Assert.True(File.Exists(f.Path)));
+        Assert.Equal(frames.Count, frames.Select(f => f.Path).Distinct().Count());
+        var (width, height) = await SizeAsync(frames[0].Path);
         Assert.Equal(768, width);
         Assert.Equal(432, height);
+    }
+
+    [Fact]
+    public async Task Frame_hashes_match_hashing_the_frames_one_by_one()
+    {
+        SkipWithoutFfmpeg();
+        var video = await GenerateAsync("sahneler.mp4", ["-f", "lavfi", "-i", "testsrc2=size=640x360:rate=10:duration=6", "-pix_fmt", "yuv420p"]);
+        var toolkit = CreateToolkit();
+        var ct = TestContext.Current.CancellationToken;
+
+        var frames = await toolkit.ExtractFramesAsync(video, Path.Combine(_dir, "sahne"), ct);
+
+        foreach (var frame in frames)
+        {
+            var single = await toolkit.PrepareImageAsync(frame.Path, Path.Combine(_dir, "tek", Path.GetFileName(frame.Path)), ct);
+            Assert.InRange(DHash.Distance(frame.DHash, single.DHash), 0, 4);
+        }
     }
 
     [Fact]
@@ -54,8 +73,8 @@ public sealed class FfmpegMediaToolkitTests : IDisposable
         var small = await GenerateAsync("küçük.png", ["-f", "lavfi", "-i", "testsrc=size=300x200:duration=1", "-frames:v", "1"]);
         var toolkit = CreateToolkit();
 
-        await toolkit.NormalizeImageAsync(large, Path.Combine(_dir, "out", "büyük.jpg"), TestContext.Current.CancellationToken);
-        await toolkit.NormalizeImageAsync(small, Path.Combine(_dir, "out", "küçük.jpg"), TestContext.Current.CancellationToken);
+        await toolkit.PrepareImageAsync(large, Path.Combine(_dir, "out", "büyük.jpg"), TestContext.Current.CancellationToken);
+        await toolkit.PrepareImageAsync(small, Path.Combine(_dir, "out", "küçük.jpg"), TestContext.Current.CancellationToken);
 
         Assert.Equal((384, 768), await SizeAsync(Path.Combine(_dir, "out", "büyük.jpg")));
         Assert.Equal((300, 200), await SizeAsync(Path.Combine(_dir, "out", "küçük.jpg")));
@@ -71,11 +90,11 @@ public sealed class FfmpegMediaToolkitTests : IDisposable
         var toolkit = CreateToolkit();
         var ct = TestContext.Current.CancellationToken;
 
-        var a = await toolkit.ComputeDHashAsync(original, ct);
-        var b = await toolkit.ComputeDHashAsync(copy, ct);
-        var c = await toolkit.ComputeDHashAsync(other, ct);
+        var a = (await toolkit.PrepareImageAsync(original, Path.Combine(_dir, "p", "a.jpg"), ct)).DHash;
+        var b = (await toolkit.PrepareImageAsync(copy, Path.Combine(_dir, "p", "b.jpg"), ct)).DHash;
+        var c = (await toolkit.PrepareImageAsync(other, Path.Combine(_dir, "p", "c.jpg"), ct)).DHash;
 
-        Assert.Equal(a, await toolkit.ComputeDHashAsync(original, ct));
+        Assert.Equal(a, (await toolkit.PrepareImageAsync(original, Path.Combine(_dir, "p", "a2.jpg"), ct)).DHash);
         Assert.InRange(DHash.Distance(a, b), 0, 6);
         Assert.True(DHash.Distance(a, c) > 12, $"distance was {DHash.Distance(a, c)}");
     }
@@ -88,7 +107,7 @@ public sealed class FfmpegMediaToolkitTests : IDisposable
         await File.WriteAllTextAsync(bad, "not an image", TestContext.Current.CancellationToken);
 
         var ex = await Assert.ThrowsAsync<ExternalToolException>(() =>
-            CreateToolkit().ComputeDHashAsync(bad, TestContext.Current.CancellationToken));
+            CreateToolkit().PrepareImageAsync(bad, Path.Combine(_dir, "p", "bozuk.jpg"), TestContext.Current.CancellationToken));
 
         Assert.Contains("ffmpeg", ex.Message, StringComparison.Ordinal);
     }

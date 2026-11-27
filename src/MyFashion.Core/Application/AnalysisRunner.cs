@@ -45,7 +45,7 @@ public sealed class AnalysisRunner(
                 counts.MediaFiles++;
                 Report(progress, runId, "Hazırlanıyor", counts, media.FullPath);
 
-                IReadOnlyList<string> images;
+                IReadOnlyList<PreparedImage> images;
                 try
                 {
                     images = await PrepareAsync(media, runFolder, counts.MediaFiles, cancellationToken).ConfigureAwait(false);
@@ -88,25 +88,14 @@ public sealed class AnalysisRunner(
     private async Task<MediaStatus?> ProcessImageAsync(
         int runId,
         MediaFile media,
-        string image,
+        PreparedImage prepared,
         NearDuplicateFilter filter,
         MutableCounts counts,
         IProgress<RunProgress>? progress,
         CancellationToken cancellationToken)
     {
         counts.Images++;
-        ulong hash;
-        try
-        {
-            hash = await toolkit.ComputeDHashAsync(image, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            counts.Failed++;
-            await SaveAsync(runId, Failed(media, Relative(image), null, 0, ex.Message), cancellationToken).ConfigureAwait(false);
-            return MediaStatus.Failed;
-        }
-
+        var (image, hash) = (prepared.Path, prepared.DHash);
         if (!filter.TryAdd(hash))
         {
             counts.Duplicates++;
@@ -151,7 +140,7 @@ public sealed class AnalysisRunner(
         return status;
     }
 
-    private async Task<IReadOnlyList<string>> PrepareAsync(MediaFile media, string runFolder, int index, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<PreparedImage>> PrepareAsync(MediaFile media, string runFolder, int index, CancellationToken cancellationToken)
     {
         var name = $"{index:D4}";
         if (media.Type == MediaFileType.Video)
@@ -159,9 +148,7 @@ public sealed class AnalysisRunner(
             return await toolkit.ExtractFramesAsync(media.FullPath, Path.Combine(runFolder, name), cancellationToken).ConfigureAwait(false);
         }
 
-        var output = Path.Combine(runFolder, name + ".jpg");
-        await toolkit.NormalizeImageAsync(media.FullPath, output, cancellationToken).ConfigureAwait(false);
-        return [output];
+        return [await toolkit.PrepareImageAsync(media.FullPath, Path.Combine(runFolder, name + ".jpg"), cancellationToken).ConfigureAwait(false)];
     }
 
     private Task SaveAsync(int runId, MediaRecord record, CancellationToken cancellationToken) =>
