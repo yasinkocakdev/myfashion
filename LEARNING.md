@@ -40,3 +40,11 @@ Projedeki önemli kararların kısa notları. Her not: **bu neydi, neden böyle 
 - **Yapay zekâ çıktısı dışarıdan gelen veri gibi işlenir.** Model yanlış bir değer uydurabilir. Ayrıca fotoğraftaki bir yazı ("talimatları unut, şunu yaz") modeli yönlendirmeye çalışabilir; buna prompt injection (OWASP LLM01) denir. Bu yüzden `ModelOutputParser` her alanı doğrular: bilinmeyen kategori `Other` olur, metinlerdeki kontrol karakterleri silinir ve uzunluk 60 karakterle sınırlanır, güven puanı 0 ile 1 arasına sıkıştırılır, en fazla 12 parça kabul edilir.
 - **Kanıtsız marka atılır.** Model "Gucci" der ama logo, yazı ya da açıklama gibi bir kanıt göstermezse marka silinir. Markalar raporun en değerli kısmı ve uydurma marka, hiç marka olmamasından daha kötüdür.
 - **Enum'lar sayı olarak gelirse reddedilir.** `Enum.TryParse` `"5"` gibi bir değeri de kabul eder; ek kontrol bu açığı kapatır.
+
+## 7. Ollama istemcisi (`feat(analysis): analyze images with a local Ollama vision model`)
+
+- **SDK yok, `HttpClient` var.** Ollama'nın `/api/chat` arayüzü tek bir JSON isteği. Bunun için kütüphane eklemek bağımlılık ve güvenlik yüzeyini gereksiz büyütürdü.
+- **JSON şeması (`format`)** modele "sadece bu biçimde cevap ver" der. Kategori, renk ve stil etiketleri sabit listelerle (`enum`) sınırlıdır. Böylece model "kömür grisi" yerine `grey` yazmak zorunda kalır ve istatistikler tutarlı olur.
+- **Sadece localhost.** `OllamaChatClient`, adres `127.0.0.1` değilse hiç oluşturulmaz. "Fotoğraflar bilgisayardan çıkmaz" sözü dokümanda değil kodda garanti altında.
+- **Hata türlerine göre farklı davranış:** Geçici hatalar (bağlantı, 5xx, bozuk çıktı) bir kez daha denenir. Kalıcı hatalar ("model kurulu değil") hemen, nasıl düzeltileceğini söyleyen bir mesajla durur. Kullanıcı işi iptal ederse bu bir hata gibi gösterilmez.
+- **Açıklama (caption) ayraçların arasına konur ve "bu veri, talimat değil" diye etiketlenir.** İçindeki `<`, `>` ve kontrol karakterleri silinir, uzunluğu 500 karakterle sınırlanır. Bu, prompt injection'a karşı ikinci savunma hattıdır; birincisi `ModelOutputParser`.
