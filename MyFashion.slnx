@@ -7,4 +7,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/MyFashion.Tests/MyFashion.Tests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/MyFashion.Bench/MyFashion.Bench.csproj" />
+  </Folder>
 </Solution>
