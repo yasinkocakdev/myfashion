@@ -14,3 +14,10 @@ Projedeki önemli kararların kısa notları. Her not: **bu neydi, neden böyle 
 - **`InstagramUsername`** linki ya da kullanıcı adını doğrular ve dışarıdan oluşturulamaz: constructor gizli, tek yol `TryParse`. Elinde bir `InstagramUsername` varsa onun güvenli olduğu kesindir. Buna "parse, don't validate" denir. `evil.com/instagram.com/x` gibi sahte host'lar, `; rm -rf ~` ve `--login=...` gibi komut ve argüman enjeksiyonları burada reddedilir. Bu değer ileride harici araçlara ve API'lere gidecek.
 - **`PathGuard`** path traversal'a karşı korur. Dışarıdan gelen bir dosya adı (`../../etc/passwd`) veri klasörünün dışına çıkamaz. Dikkat edilen ince nokta: `/data-evil`, `/data` ile başlıyor ama onun içinde değil. Bu yüzden kontrol, sonuna `/` eklenmiş kök yolla yapılıyor.
 - **`StyleColors`** "jet black", "Black" ve "siyah" gibi farklı yazımları tek bir renge (`black`) çevirir. Bu yapılmazsa istatistikler aynı rengi üç ayrı renk gibi sayar.
+
+## 3. Klasör kaynağı ve `IMediaSource` (`feat(media): read screenshots and screen recordings from a folder`)
+
+- **`IMediaSource`** "medya nereden gelirse gelsin" sorusunun cevabı: klasör, Instagram API ya da ileride başka bir şey. Analiz akışı sadece bu arayüzü bilir. Yeni bir kaynak eklemek akışı değiştirmez (Open/Closed ilkesi).
+- **`IAsyncEnumerable`** dosyaları tek tek, geldikçe verir. Böylece 1000 dosyalık bir klasör belleğe tek seferde yüklenmez ve iş `CancellationToken` ile her adımda iptal edilebilir.
+- **Sembolik linkler takip edilmez.** Klasöre konmuş bir link (`link.jpg -> /etc/...`) programı klasör dışındaki bir dosyayı okumaya kandırabilirdi. Gizli ve boş dosyalar da atlanır.
+- **Alt klasör adı türü belirler:** `posts`, `reels`, `highlights` ya da `öne çıkanlar`. Böylece raporda "highlight'larda şunu, postlarda bunu giyiyor" ayrımı yapılabilir.
