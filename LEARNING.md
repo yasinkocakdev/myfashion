@@ -27,3 +27,10 @@ Projedeki önemli kararların kısa notları. Her not: **bu neydi, neden böyle 
 - **`ProcessRunner`** ffmpeg gibi harici araçları shell olmadan çalıştırır. Argümanlar `ArgumentList` ile tek tek verilir. Dosya adı `a; rm -rf ~` olsa bile bu bir komut olarak değil, düz metin olarak gider. Testi de tam olarak bunu kontrol ediyor. Zaman aşımı ya da iptalde süreç ağacının tamamı öldürülür; böylece arkada asılı kalan ffmpeg kalmaz.
 - **dHash**, bir görseli 9x8 gri piksele küçültüp yan yana piksellerin "soldaki daha mı parlak?" sorusuna verdiği 64 cevabı 64 bitlik bir sayıya dönüştürür. Neredeyse aynı iki karenin hash'leri sadece birkaç bitte farklıdır. İki hash arasındaki fark `PopCount(a ^ b)` ile tek bir işlemci komutunda bulunur.
 - **`NearDuplicateFilter`** bir ekran kaydındaki yüzlerce benzer kareden yalnızca gerçekten farklı olanları bırakır. Bu, modelin gereksiz yere aynı kıyafeti 50 kez analiz etmesini önler; performans adımının en büyük kazancı buradan gelecek.
+
+## 5. ffmpeg araç seti (`feat(media): extract frames, resize and hash with ffmpeg`)
+
+- **`IMediaToolkit`** Core'da bir arayüz, `FfmpegMediaToolkit` ise Infrastructure'da onun uygulaması. Analiz akışı ffmpeg'i hiç bilmez. Testlerde ffmpeg yerine sahte bir araç seti verilebilir; ileride başka bir kütüphaneye geçmek de sadece bu sınıfı değiştirir.
+- **Görseller modele gitmeden önce 768 piksele küçültülür.** Model büyük görselde daha yavaş çalışır ama kıyafet tanımada belirgin şekilde daha iyi olmaz. `force_original_aspect_ratio=decrease` en-boy oranını korur, `min(768,iw)` ise küçük görseli büyütmez.
+- **`ToolLocator`**: Finder'dan açılan uygulamalar terminalin PATH'ini görmez. Bu yüzden Homebrew'un klasörlerine açıkça bakılır.
+- **Entegrasyon testleri** gerçek ffmpeg'le, test sırasında ffmpeg'in kendi ürettiği örnek video ve görsellerle çalışır. Repoya ikili test dosyası koymaya gerek kalmaz. ffmpeg yoksa testler hata vermez, atlanır (`Assert.SkipWhen`).

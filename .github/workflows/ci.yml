@@ -19,6 +19,9 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Install ffmpeg (media integration tests)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       - name: Restore
         run: dotnet restore MyFashion.slnx
 
