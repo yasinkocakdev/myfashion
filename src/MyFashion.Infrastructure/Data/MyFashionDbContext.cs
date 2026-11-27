@@ -17,6 +17,8 @@ public sealed class MyFashionDbContext(DbContextOptions<MyFashionDbContext> opti
 
     public DbSet<GarmentEntity> Garments => Set<GarmentEntity>();
 
+    public DbSet<UserPreferencesEntity> UserPreferences => Set<UserPreferencesEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -62,6 +64,17 @@ public sealed class MyFashionDbContext(DbContextOptions<MyFashionDbContext> opti
             garment.Property(g => g.Brand).HasMaxLength(60);
             garment.HasOne(g => g.MediaItem).WithMany(m => m.Garments).HasForeignKey(g => g.MediaItemId).OnDelete(DeleteBehavior.Cascade);
             garment.HasIndex(g => g.Brand);
+        });
+
+        modelBuilder.Entity<UserPreferencesEntity>(preferences =>
+        {
+            preferences.ToTable("UserProfiles");
+            preferences.Property(p => p.Id).ValueGeneratedNever();
+            preferences.Property(p => p.Gender).HasMaxLength(100);
+            preferences.Property(p => p.Sizes).HasMaxLength(100);
+            preferences.Property(p => p.Budget).HasMaxLength(100);
+            preferences.Property(p => p.Stores).HasMaxLength(200);
+            preferences.Property(p => p.Notes).HasMaxLength(500);
         });
     }
 }

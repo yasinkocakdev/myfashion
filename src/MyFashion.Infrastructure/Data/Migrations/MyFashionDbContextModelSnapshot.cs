@@ -216,6 +216,37 @@ namespace MyFashion.Infrastructure.Data.Migrations
                     b.ToTable("Runs");
                 });
 
+            modelBuilder.Entity("MyFashion.Infrastructure.Data.UserPreferencesEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Budget")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Gender")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Sizes")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Stores")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("UserProfiles", (string)null);
+                });
+
             modelBuilder.Entity("MyFashion.Infrastructure.Data.GarmentEntity", b =>
                 {
                     b.HasOne("MyFashion.Infrastructure.Data.MediaItemEntity", "MediaItem")
