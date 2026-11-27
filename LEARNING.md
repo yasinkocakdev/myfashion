@@ -21,3 +21,9 @@ Projedeki önemli kararların kısa notları. Her not: **bu neydi, neden böyle 
 - **`IAsyncEnumerable`** dosyaları tek tek, geldikçe verir. Böylece 1000 dosyalık bir klasör belleğe tek seferde yüklenmez ve iş `CancellationToken` ile her adımda iptal edilebilir.
 - **Sembolik linkler takip edilmez.** Klasöre konmuş bir link (`link.jpg -> /etc/...`) programı klasör dışındaki bir dosyayı okumaya kandırabilirdi. Gizli ve boş dosyalar da atlanır.
 - **Alt klasör adı türü belirler:** `posts`, `reels`, `highlights` ya da `öne çıkanlar`. Böylece raporda "highlight'larda şunu, postlarda bunu giyiyor" ayrımı yapılabilir.
+
+## 4. Shell'siz süreç çalıştırma ve dHash (`feat(infra): run external tools without a shell`, `feat(media): add dHash and near-duplicate filter`)
+
+- **`ProcessRunner`** ffmpeg gibi harici araçları shell olmadan çalıştırır. Argümanlar `ArgumentList` ile tek tek verilir. Dosya adı `a; rm -rf ~` olsa bile bu bir komut olarak değil, düz metin olarak gider. Testi de tam olarak bunu kontrol ediyor. Zaman aşımı ya da iptalde süreç ağacının tamamı öldürülür; böylece arkada asılı kalan ffmpeg kalmaz.
+- **dHash**, bir görseli 9x8 gri piksele küçültüp yan yana piksellerin "soldaki daha mı parlak?" sorusuna verdiği 64 cevabı 64 bitlik bir sayıya dönüştürür. Neredeyse aynı iki karenin hash'leri sadece birkaç bitte farklıdır. İki hash arasındaki fark `PopCount(a ^ b)` ile tek bir işlemci komutunda bulunur.
+- **`NearDuplicateFilter`** bir ekran kaydındaki yüzlerce benzer kareden yalnızca gerçekten farklı olanları bırakır. Bu, modelin gereksiz yere aynı kıyafeti 50 kez analiz etmesini önler; performans adımının en büyük kazancı buradan gelecek.
