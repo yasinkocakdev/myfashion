@@ -33,6 +33,7 @@ public sealed class OllamaVisionAnalyzerTests : IDisposable
         Assert.Equal("qwen3-vl:8b", (string?)request["model"]);
         Assert.False((bool)request["stream"]!);
         Assert.False((bool)request["think"]!);
+        Assert.Equal(1024, (int)request["options"]!["num_predict"]!);
         Assert.Equal("object", (string?)request["format"]!["type"]);
         var user = request["messages"]![1]!;
         Assert.Equal(Convert.ToBase64String(_imageBytes), (string?)user["images"]![0]);

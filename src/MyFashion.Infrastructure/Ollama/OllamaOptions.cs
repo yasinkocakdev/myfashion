@@ -16,4 +16,10 @@ public sealed record OllamaOptions
 
     /// <summary>Attempts per image for transient failures (network, 5xx, unusable output).</summary>
     public int MaxAttempts { get; init; } = 2;
+
+    /// <summary>Output token limit for one image analysis; a runaway answer stops here instead of at the timeout.</summary>
+    public int MaxAnalysisTokens { get; init; } = 1024;
+
+    /// <summary>Output token limit for the shopping list and outfit suggestions.</summary>
+    public int MaxRecommendationTokens { get; init; } = 3072;
 }
