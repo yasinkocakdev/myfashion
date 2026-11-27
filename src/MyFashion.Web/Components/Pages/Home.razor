@@ -4,6 +4,7 @@
 @inject IAnalysisReader Reader
 @inject AnalysisJobService Jobs
 @inject SystemCheck Checker
+@inject InstagramCredentialStore Credentials
 @inject NavigationManager Navigation
 
 <PageTitle>Analizler · myfashion</PageTitle>
@@ -42,6 +43,29 @@
                     <span id="account-error" class="field-error">@_accountError</span>
                 }
             </div>
+            <fieldset class="field" style="border: 0; padding: 0; margin: var(--space-4) 0 0">
+                <legend style="font-size: var(--text-sm); font-weight: var(--weight-medium); margin-bottom: var(--space-2)">Kaynak</legend>
+                <div class="checkbox-row">
+                    <label><input type="checkbox" @bind="_useApi" disabled="@(!_apiConnected)" /> Post ve reels: Instagram API</label>
+                    <label><input type="checkbox" @bind="_useFolder" /> Klasör: ekran görüntüleri ve kayıtlar</label>
+                </div>
+                <span class="hint">
+                    @if (_apiConnected)
+                    {
+                        <text>API yalnızca İşletme/İçerik Üreticisi hesaplarını okur; öne çıkanlar için klasörü de seç.</text>
+                    }
+                    else
+                    {
+                        <text>Instagram API bağlı değil. Bağlamak için <a href="settings">Ayarlar</a>; o zamana kadar klasör kullan.</text>
+                    }
+                </span>
+                @if (_sourceError is not null)
+                {
+                    <span class="field-error">@_sourceError</span>
+                }
+            </fieldset>
+            @if (_useFolder)
+            {
             <div class="field">
                 <label for="folder">Ekran görüntüleri ve kayıtların klasörü</label>
                 <input id="folder" type="text" @bind="_folder" placeholder="/Users/sen/Desktop/hesap-adi"
@@ -56,6 +80,7 @@
                     <span id="folder-error" class="field-error">@_folderError</span>
                 }
             </div>
+            }
             <div class="actions">
                 <button type="submit" class="button button--primary">Analizi başlat</button>
             </div>
@@ -112,6 +137,10 @@
     private string? _folder;
     private string? _accountError;
     private string? _folderError;
+    private string? _sourceError;
+    private bool _useFolder = true;
+    private bool _useApi;
+    private bool _apiConnected;
     private string? _accountsError;
     private IReadOnlyList<AccountOverview>? _accounts;
     private IReadOnlyList<AnalysisJob> _recentJobs = [];
@@ -121,6 +150,7 @@
     {
         Jobs.Changed += OnJobChanged;
         _recentJobs = Jobs.Recent();
+        _apiConnected = await Credentials.GetConnectedUserIdAsync(CancellationToken.None) is not null;
         await Task.WhenAll(LoadAccountsAsync(), CheckSystemAsync());
     }
 
@@ -143,14 +173,24 @@
     {
         _accountError = null;
         _folderError = null;
+        _sourceError = null;
 
         if (!InstagramUsername.TryParse(_account, out var username, out var accountError))
         {
             _accountError = accountError;
         }
 
+        if (!_useFolder && !_useApi)
+        {
+            _sourceError = "En az bir kaynak seç.";
+        }
+
         var folder = _folder?.Trim().Trim('"', '\'');
-        if (string.IsNullOrEmpty(folder))
+        if (!_useFolder)
+        {
+            folder = null;
+        }
+        else if (string.IsNullOrEmpty(folder))
         {
             _folderError = "Klasör yolunu gir.";
         }
@@ -163,13 +203,20 @@
             _folderError = "Bu klasör bulunamadı.";
         }
 
-        if (_accountError is not null || _folderError is not null || username is null)
+        if (_accountError is not null || _folderError is not null || _sourceError is not null || username is null)
         {
             return;
         }
 
-        var job = Jobs.Enqueue(username.Value, Path.GetFullPath(folder!));
-        Navigation.NavigateTo($"jobs/{job.Id}");
+        try
+        {
+            var job = Jobs.Enqueue(username.Value, folder is null ? null : Path.GetFullPath(folder), _useApi && _apiConnected);
+            Navigation.NavigateTo($"jobs/{job.Id}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _sourceError = ex.Message;
+        }
     }
 
     private void OnJobChanged(AnalysisJob job) => _ = InvokeAsync(() =>

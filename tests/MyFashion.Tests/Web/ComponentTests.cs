@@ -90,7 +90,7 @@ public sealed class ComponentTests : BunitContext
     [Fact]
     public void JobProgressView_announces_failures_and_counts()
     {
-        var job = new AnalysisJob(Guid.NewGuid(), "hesap", "/klasör", JobStatus.Failed, DateTimeOffset.UtcNow,
+        var job = new AnalysisJob(Guid.NewGuid(), "hesap", "/klasör", false, JobStatus.Failed, DateTimeOffset.UtcNow,
             new RunProgress(1, "Analiz ediliyor", new RunCounts(2, 3, 1, 1, 0, 1, 0), null), 1, "Ollama çalışmıyor");
 
         var cut = Render<JobProgressView>(p => p.Add(x => x.Job, job));
@@ -103,13 +103,14 @@ public sealed class ComponentTests : BunitContext
     [Fact]
     public void JobProgressView_shows_live_status_while_running()
     {
-        var job = new AnalysisJob(Guid.NewGuid(), "hesap", "/klasör", JobStatus.Running, DateTimeOffset.UtcNow,
+        var job = new AnalysisJob(Guid.NewGuid(), "hesap", "/klasör", true, JobStatus.Running, DateTimeOffset.UtcNow,
             new RunProgress(1, "Analiz ediliyor", new RunCounts(1, 1, 0, 0, 0, 0, 0), "a.jpg"));
 
         var cut = Render<JobProgressView>(p => p.Add(x => x.Job, job));
 
         Assert.Contains("Analiz ediliyor", cut.Find("[role=status]").TextContent, StringComparison.Ordinal);
         Assert.NotNull(cut.Find(".progress"));
+        Assert.Contains("Instagram API", cut.Markup, StringComparison.Ordinal);
     }
 
     [Theory]

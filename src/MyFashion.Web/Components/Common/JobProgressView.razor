@@ -7,7 +7,16 @@
         <h2 id="job-title">@Job.Account</h2>
         <span class="badge @StatusClass">@StatusText</span>
     </div>
-    <p class="muted small mono">@Job.Folder</p>
+    <p class="muted small">
+        @if (Job.UseApi)
+        {
+            <span class="badge">Instagram API</span>
+        }
+        @if (Job.Folder is not null)
+        {
+            <span class="mono"> @Job.Folder</span>
+        }
+    </p>
 
     @if (!Job.IsFinished)
     {

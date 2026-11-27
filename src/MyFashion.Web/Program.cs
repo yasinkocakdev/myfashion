@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using MyFashion.Core.Analysis;
 using MyFashion.Core.Application;
 using MyFashion.Core.Media;
 using MyFashion.Core.Recommendations;
 using MyFashion.Infrastructure.Data;
+using MyFashion.Infrastructure.Instagram;
 using MyFashion.Infrastructure.Media;
 using MyFashion.Infrastructure.Ollama;
 using MyFashion.Infrastructure.Processes;
@@ -35,6 +37,19 @@ builder.Services.AddSingleton(ollamaOptions);
 builder.Services.AddHttpClient<OllamaChatClient>(http => http.Timeout = Timeout.InfiniteTimeSpan);
 builder.Services.AddTransient<IVisionAnalyzer, OllamaVisionAnalyzer>();
 builder.Services.AddTransient<IRecommendationGenerator, OllamaRecommendationGenerator>();
+
+// Official Instagram API (optional). The token is encrypted at rest with Data Protection.
+builder.Services.AddDataProtection()
+    .SetApplicationName("MyFashion")
+    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(paths.DataRoot, "keys")));
+builder.Services.AddSingleton<InstagramCredentialStore>();
+var instagramOptions = builder.Configuration.GetSection("Instagram").Get<InstagramApiOptions>() ?? new InstagramApiOptions();
+builder.Services.AddSingleton(instagramOptions);
+builder.Services.AddHttpClient<InstagramGraphClient>(http => http.Timeout = Timeout.InfiniteTimeSpan);
+
+// Media downloads: no automatic redirects, so a CDN URL cannot bounce the request to another host (SSRF).
+builder.Services.AddHttpClient(AnalysisJobService.InstagramCdn, http => http.Timeout = TimeSpan.FromMinutes(2))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 
 // Application services
 builder.Services.AddSingleton(new AnalysisRunnerOptions(paths.DataRoot));

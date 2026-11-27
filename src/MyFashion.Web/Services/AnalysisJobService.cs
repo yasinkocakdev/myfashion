@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 using MyFashion.Core.Application;
+using MyFashion.Core.Instagram;
+using MyFashion.Core.Media;
+using MyFashion.Infrastructure.Instagram;
 using MyFashion.Infrastructure.Media;
 
 namespace MyFashion.Web.Services;
@@ -14,11 +17,15 @@ public enum JobStatus
     Cancelled,
 }
 
-/// <summary>An immutable snapshot of a background analysis, safe to read from any thread.</summary>
+/// <summary>
+/// An immutable snapshot of a background analysis, safe to read from any thread.
+/// <c>Folder</c> is the folder of screenshots/recordings (or null); <c>UseApi</c> also fetches posts and reels through the official Instagram API.
+/// </summary>
 public sealed record AnalysisJob(
     Guid Id,
     string Account,
-    string Folder,
+    string? Folder,
+    bool UseApi,
     JobStatus Status,
     DateTimeOffset CreatedAt,
     RunProgress? Progress = null,
@@ -40,9 +47,18 @@ public sealed partial class AnalysisJobService(IServiceScopeFactory scopes, Time
 
     public event Action<AnalysisJob>? Changed;
 
-    public AnalysisJob Enqueue(string account, string folder)
+    /// <summary>Most jobs that may wait in the queue; more is almost certainly a mistake (double clicks, a stuck model).</summary>
+    public const int MaxQueuedJobs = 10;
+
+    /// <exception cref="InvalidOperationException">The queue is full.</exception>
+    public AnalysisJob Enqueue(string account, string? folder, bool useApi)
     {
-        var job = new AnalysisJob(Guid.NewGuid(), account, folder, JobStatus.Queued, clock.GetUtcNow());
+        if (_jobs.Values.Count(j => !j.IsFinished) >= MaxQueuedJobs)
+        {
+            throw new InvalidOperationException($"Sırada zaten {MaxQueuedJobs} analiz var. Önce onların bitmesini bekle.");
+        }
+
+        var job = new AnalysisJob(Guid.NewGuid(), account, folder, useApi, JobStatus.Queued, clock.GetUtcNow());
         _jobs[job.Id] = job;
         _cancellations[job.Id] = new CancellationTokenSource();
         _queue.Writer.TryWrite(job.Id);
@@ -91,7 +107,8 @@ public sealed partial class AnalysisJobService(IServiceScopeFactory scopes, Time
         {
             using var scope = scopes.CreateScope();
             var runner = scope.ServiceProvider.GetRequiredService<AnalysisRunner>();
-            var runId = await runner.RunAsync(job.Account, new FolderMediaSource(job.Folder), RunSource.Folder, progress, cancellationToken).ConfigureAwait(false);
+            var (source, kind) = await CreateSourceAsync(scope.ServiceProvider, job, cancellationToken).ConfigureAwait(false);
+            var runId = await runner.RunAsync(job.Account, source, kind, progress, cancellationToken).ConfigureAwait(false);
             Update(Get(job.Id)! with { Status = JobStatus.Completed, RunId = runId });
         }
         catch (OperationCanceledException)
@@ -104,6 +121,40 @@ public sealed partial class AnalysisJobService(IServiceScopeFactory scopes, Time
             Update(Get(job.Id)! with { Status = JobStatus.Failed, Error = ex.Message });
         }
     }
+
+    private static async Task<(IMediaSource Source, RunSource Kind)> CreateSourceAsync(IServiceProvider services, AnalysisJob job, CancellationToken cancellationToken)
+    {
+        var sources = new List<IMediaSource>();
+        if (job.UseApi)
+        {
+            var credentials = await services.GetRequiredService<InstagramCredentialStore>().GetAsync(cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Instagram bağlantısı yok. Ayarlar'dan erişim anahtarını gir.");
+            if (!InstagramUsername.TryParse(job.Account, out var target, out var error))
+            {
+                throw new InvalidOperationException(error);
+            }
+
+            var cdn = services.GetRequiredService<IHttpClientFactory>().CreateClient(InstagramCdn);
+            var downloads = Path.Combine(services.GetRequiredService<AppPaths>().DataRoot, "downloads");
+            sources.Add(new InstagramApiMediaSource(services.GetRequiredService<InstagramGraphClient>(), cdn, credentials, target, downloads));
+        }
+
+        if (job.Folder is not null)
+        {
+            sources.Add(new FolderMediaSource(job.Folder));
+        }
+
+        var kind = (job.UseApi, job.Folder is not null) switch
+        {
+            (true, true) => RunSource.Mixed,
+            (true, false) => RunSource.InstagramApi,
+            _ => RunSource.Folder,
+        };
+        return (sources.Count == 1 ? sources[0] : new CompositeMediaSource(sources), kind);
+    }
+
+    /// <summary>Name of the HttpClient that downloads media from the Instagram CDN (no redirects, see Program.cs).</summary>
+    public const string InstagramCdn = "instagram-cdn";
 
     private void Update(AnalysisJob job)
     {
