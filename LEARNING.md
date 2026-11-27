@@ -55,3 +55,11 @@ Projedeki önemli kararların kısa notları. Her not: **bu neydi, neden böyle 
 - **Hata izolasyonu:** Bozuk bir dosya ya da analiz edilemeyen bir görsel işi durdurmaz; "başarısız" olarak kaydedilip geçilir. Ama üst üste 5 hata, büyük ihtimalle Ollama'nın kapalı olduğu anlamına gelir. O zaman yüzlerce görseli boşuna denemek yerine iş anlaşılır bir mesajla durur (circuit breaker fikri).
 - **Önbellek anahtarı, hazırlanmış görselin SHA-256'sı ve model adıdır.** İş iptal edilip yeniden başlatıldığında ya da aynı hesap tekrar analiz edildiğinde, önceden analiz edilmiş görseller modele tekrar gönderilmez. Model değişirse önbellek kullanılmaz, çünkü farklı model farklı sonuç verir.
 - **İptal edilen işin durumu `CancellationToken.None` ile kaydedilir.** İptal edilmiş token'la "iptal edildi" bilgisini kaydetmeye çalışmak, kaydın kendisini de iptal ederdi.
+
+## 9. SQLite ve EF Core (`feat(data): persist runs and analyses in SQLite with EF Core`)
+
+- **Taşınabilir model:** Enum'lar sayı değil metin olarak saklanır (`HasConversion<string>`); veritabanına bakınca `Outerwear` yazar. Tarihler UTC `DateTime` tutulur, çünkü SQLite `DateTimeOffset` ile sıralama yapamaz. Her metin alanının uzunluğu açıkça belirtilir. Bu üç kural sayesinde ileride SQL Server ya da PostgreSQL'e geçiş genelde `UseSqlite` satırını değiştirmek ve migration'ları yeniden üretmek demek.
+- **Migration'lar** şemanın sürüm geçmişi gibidir. `dotnet ef migrations add` ile üretilir ve uygulama açılırken uygulanır. Elle tablo yazmak yerine kod ile şema hep aynı kalır.
+- **`IDbContextFactory` ile her işlem için yeni bir DbContext:** DbContext thread-safe değildir. Analiz arka planda çalışırken arayüz de veriyi okuyacak; her çağrının kendi context'i olması çakışmayı önler.
+- **Testler gerçek SQLite'la çalışır** (bellekte, `:memory:`). EF Core'un "InMemory" sağlayıcısı ilişkileri ve kısıtları gerçek bir veritabanı gibi uygulamadığı için yanıltıcı olabilir.
+- **Ders:** `.gitignore`'daki `data/` kuralı macOS'ta (büyük-küçük harf duyarsız) `Data/` kod klasörünü de gizledi. Kökteki klasörleri `/data/` diye sabitlemek gerekiyor. `git status`'a her commit öncesi bakmak bu yüzden önemli.

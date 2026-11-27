@@ -2,6 +2,14 @@
 
   <!-- Everything that touches the outside world: processes, HTTP, files, SQLite. -->
   <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MyFashion.Core\MyFashion.Core.csproj" />
   </ItemGroup>
 
