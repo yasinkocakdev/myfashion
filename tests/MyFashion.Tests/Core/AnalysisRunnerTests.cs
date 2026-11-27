@@ -120,6 +120,49 @@ public sealed class AnalysisRunnerTests : IDisposable
         Assert.Equal(1, reports[^1].Counts.Analyzed);
     }
 
+    [Fact]
+    public async Task Prepares_the_next_file_while_the_model_analyzes_the_current_one()
+    {
+        var media = new[] { Image("a.jpg", "hash=0;id=coat"), Image("b.jpg", "hash=4294967295;id=jeans") };
+        var toolkit = new FakeToolkit();
+        var secondPrepared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        toolkit.OnPrepare = path =>
+        {
+            if (path.EndsWith("b.jpg", StringComparison.Ordinal))
+            {
+                secondPrepared.TrySetResult();
+            }
+        };
+        var overlapped = false;
+        _analyzer.BeforeCall = async calls =>
+        {
+            if (calls == 1)
+            {
+                // With a sequential runner b.jpg is only prepared after this call returns, so this would time out.
+                overlapped = await Task.WhenAny(secondPrepared.Task, Task.Delay(TimeSpan.FromSeconds(5))) == secondPrepared.Task;
+            }
+        };
+
+        await new AnalysisRunner(toolkit, _analyzer, _store, new AnalysisRunnerOptions(_root))
+            .RunAsync("hesap", new FakeSource(media), RunSource.Folder, null, TestContext.Current.CancellationToken);
+
+        Assert.True(overlapped);
+        Assert.Equal(2, _store.Runs.Values.Single().Counts!.Analyzed);
+    }
+
+    [Fact]
+    public async Task A_failing_source_fails_the_run_with_its_error()
+    {
+        var runner = CreateRunner();
+
+        await Assert.ThrowsAsync<DirectoryNotFoundException>(() =>
+            runner.RunAsync("hesap", new ThrowingSource(), RunSource.Folder, null, TestContext.Current.CancellationToken));
+
+        var run = Assert.Single(_store.Runs.Values);
+        Assert.Equal(RunStatus.Failed, run.Status);
+        Assert.Contains("yok", run.Error, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("some.user", "some.user")]
     [InlineData("Öne çıkanlar/../x", "Öne_çıkanlar_.._x")]
@@ -163,6 +206,18 @@ public sealed class AnalysisRunnerTests : IDisposable
         }
     }
 
+    private sealed class ThrowingSource : IMediaSource
+    {
+        public async IAsyncEnumerable<MediaFile> GetMediaAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            throw new DirectoryNotFoundException("Klasör yok");
+#pragma warning disable CS0162 // An async iterator needs a yield statement.
+            yield break;
+#pragma warning restore CS0162
+        }
+    }
+
     private sealed class FakeToolkit : IMediaToolkit
     {
         public Task<IReadOnlyList<PreparedImage>> ExtractFramesAsync(string videoPath, string outputDirectory, CancellationToken cancellationToken)
@@ -178,8 +233,11 @@ public sealed class AnalysisRunnerTests : IDisposable
             return Task.FromResult<IReadOnlyList<PreparedImage>>(prepared);
         }
 
+        public Action<string>? OnPrepare { get; set; }
+
         public Task<PreparedImage> PrepareImageAsync(string imagePath, string outputPath, CancellationToken cancellationToken)
         {
+            OnPrepare?.Invoke(imagePath);
             var content = File.ReadAllText(imagePath);
             if (content == "corrupt")
             {
@@ -202,10 +260,17 @@ public sealed class AnalysisRunnerTests : IDisposable
 
         public string ModelName => "fake-model";
 
-        public Task<ImageAnalysis> AnalyzeAsync(string imagePath, string? caption, CancellationToken cancellationToken)
+        public Func<int, Task>? BeforeCall { get; set; }
+
+        public async Task<ImageAnalysis> AnalyzeAsync(string imagePath, string? caption, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             Calls++;
+            if (BeforeCall is not null)
+            {
+                await BeforeCall(Calls);
+            }
+
             var id = Field(File.ReadAllText(imagePath), "id");
             AfterCall?.Invoke(Calls);
             if (id == "fail")
@@ -213,9 +278,9 @@ public sealed class AnalysisRunnerTests : IDisposable
                 throw new AnalysisFailedException("Model geçerli JSON döndürmedi.");
             }
 
-            return Task.FromResult(id == "nooutfit"
+            return id == "nooutfit"
                 ? ImageAnalysis.Empty
-                : new ImageAnalysis(true, [new Garment(GarmentCategory.Top, id, "black", GarmentPattern.Solid, GarmentFit.Regular, null, BrandEvidence.None, 0.9)], ["minimal"]));
+                : new ImageAnalysis(true, [new Garment(GarmentCategory.Top, id, "black", GarmentPattern.Solid, GarmentFit.Regular, null, BrandEvidence.None, 0.9)], ["minimal"]);
         }
     }
 

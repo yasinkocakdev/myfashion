@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Threading.Channels;
 using MyFashion.Core.Analysis;
 using MyFashion.Core.IO;
 using MyFashion.Core.Media;
@@ -9,12 +10,15 @@ namespace MyFashion.Core.Application;
 /// <param name="DataRoot">Where prepared images are written (outside the repository).</param>
 /// <param name="DuplicateDistance">dHash distance at or below which two images count as the same.</param>
 /// <param name="MaxConsecutiveFailures">Stop the run when this many images fail in a row (for example Ollama is down).</param>
-public sealed record AnalysisRunnerOptions(string DataRoot, int DuplicateDistance = 6, int MaxConsecutiveFailures = 5);
+/// <param name="PrefetchCapacity">How many media files may be prepared ahead while the model is busy.</param>
+public sealed record AnalysisRunnerOptions(string DataRoot, int DuplicateDistance = 6, int MaxConsecutiveFailures = 5, int PrefetchCapacity = 4);
 
 /// <summary>
 /// Runs one analysis: media → prepared images → near-duplicate filter → cache or model → store.
 /// A broken file never stops the run; it is recorded as failed and skipped. Cancelling keeps
 /// everything analyzed so far, and a later run reuses it from the cache.
+/// Preparation (ffmpeg) runs ahead on a producer task while the model analyzes the previous image;
+/// a bounded channel keeps the order and limits how far it may run ahead.
 /// </summary>
 public sealed class AnalysisRunner(
     IMediaToolkit toolkit,
@@ -38,29 +42,31 @@ public sealed class AnalysisRunner(
         var runFolder = PathGuard.ResolveWithin(options.DataRoot, Path.Combine("media", SafeName(accountName), $"run-{runId}"));
         var consecutiveFailures = 0;
 
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var channel = Channel.CreateBounded<PreparedMedia>(new BoundedChannelOptions(Math.Max(1, options.PrefetchCapacity))
+        {
+            SingleReader = true,
+            SingleWriter = true,
+            FullMode = BoundedChannelFullMode.Wait,
+        });
+        var producer = ProduceAsync(source, channel.Writer, runFolder, counts, stop.Token);
+
         try
         {
-            await foreach (var media in source.GetMediaAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var item in channel.Reader.ReadAllAsync(stop.Token).ConfigureAwait(false))
             {
-                counts.MediaFiles++;
-                Report(progress, runId, "Hazırlanıyor", counts, media.FullPath);
-
-                IReadOnlyList<PreparedImage> images;
-                try
+                Report(progress, runId, "Hazırlanıyor", counts, item.Media.FullPath);
+                if (item.Error is not null)
                 {
-                    images = await PrepareAsync(media, runFolder, counts.MediaFiles, cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    counts.Failed++;
-                    await SaveAsync(runId, Failed(media, null, null, 0, ex.Message), cancellationToken).ConfigureAwait(false);
+                    counts.Add(failed: 1);
+                    await SaveAsync(runId, Failed(item.Media, null, null, 0, item.Error), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
-                foreach (var image in images)
+                foreach (var image in item.Images)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var outcome = await ProcessImageAsync(runId, media, image, filter, counts, progress, cancellationToken).ConfigureAwait(false);
+                    var outcome = await ProcessImageAsync(runId, item.Media, image, filter, counts, progress, cancellationToken).ConfigureAwait(false);
                     consecutiveFailures = outcome == MediaStatus.Failed ? consecutiveFailures + 1 : 0;
                     if (consecutiveFailures >= options.MaxConsecutiveFailures)
                     {
@@ -69,20 +75,61 @@ public sealed class AnalysisRunner(
                 }
             }
 
+            await producer.ConfigureAwait(false);
             await store.FinishRunAsync(runId, RunStatus.Completed, counts.Snapshot(), null, CancellationToken.None).ConfigureAwait(false);
             Report(progress, runId, "Tamamlandı", counts, null);
             return runId;
         }
         catch (OperationCanceledException)
         {
+            await StopProducerAsync(stop, producer).ConfigureAwait(false);
             await store.FinishRunAsync(runId, RunStatus.Cancelled, counts.Snapshot(), "İptal edildi.", CancellationToken.None).ConfigureAwait(false);
             throw;
         }
         catch (Exception ex)
         {
+            await StopProducerAsync(stop, producer).ConfigureAwait(false);
             await store.FinishRunAsync(runId, RunStatus.Failed, counts.Snapshot(), ex.Message, CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    /// <summary>Prepares media in order and hands it to the consumer. Never throws: errors complete the channel.</summary>
+    private async Task ProduceAsync(IMediaSource source, ChannelWriter<PreparedMedia> writer, string runFolder, MutableCounts counts, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var index = 0;
+            await foreach (var media in source.GetMediaAsync(cancellationToken).ConfigureAwait(false))
+            {
+                index++;
+                counts.Add(mediaFiles: 1);
+                PreparedMedia item;
+                try
+                {
+                    item = new PreparedMedia(media, await PrepareAsync(media, runFolder, index, cancellationToken).ConfigureAwait(false), null);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    item = new PreparedMedia(media, [], ex.Message);
+                }
+
+                await writer.WriteAsync(item, cancellationToken).ConfigureAwait(false);
+            }
+
+            writer.TryComplete();
+        }
+        catch (Exception ex)
+        {
+            // Includes cancellation and errors from the source itself (for example a missing folder).
+            writer.TryComplete(ex);
+        }
+    }
+
+    private static async Task StopProducerAsync(CancellationTokenSource stop, Task producer)
+    {
+        await stop.CancelAsync().ConfigureAwait(false);
+        await producer.ConfigureAwait(false);
     }
 
     private async Task<MediaStatus?> ProcessImageAsync(
@@ -94,11 +141,11 @@ public sealed class AnalysisRunner(
         IProgress<RunProgress>? progress,
         CancellationToken cancellationToken)
     {
-        counts.Images++;
+        counts.Add(images: 1);
         var (image, hash) = (prepared.Path, prepared.DHash);
         if (!filter.TryAdd(hash))
         {
-            counts.Duplicates++;
+            counts.Add(duplicates: 1);
             return null;
         }
 
@@ -108,7 +155,7 @@ public sealed class AnalysisRunner(
         var cached = await store.FindCachedAsync(sha, analyzer.ModelName, cancellationToken).ConfigureAwait(false);
         if (cached is not null)
         {
-            counts.FromCache++;
+            counts.Add(fromCache: 1);
             analysis = cached;
         }
         else
@@ -119,7 +166,7 @@ public sealed class AnalysisRunner(
             }
             catch (AnalysisFailedException ex)
             {
-                counts.Failed++;
+                counts.Add(failed: 1);
                 await SaveAsync(runId, Failed(media, Relative(image), sha, hash, ex.Message), cancellationToken).ConfigureAwait(false);
                 return MediaStatus.Failed;
             }
@@ -128,11 +175,11 @@ public sealed class AnalysisRunner(
         var status = analysis.HasOutfit && analysis.Garments.Count > 0 ? MediaStatus.Analyzed : MediaStatus.NoOutfit;
         if (status == MediaStatus.Analyzed)
         {
-            counts.Analyzed++;
+            counts.Add(analyzed: 1);
         }
         else
         {
-            counts.NoOutfit++;
+            counts.Add(noOutfit: 1);
         }
 
         var record = new MediaRecord(media.Kind, media.FullPath, Relative(image), sha, hash, media.Caption, media.TakenAt, status, analysis, null);
@@ -180,22 +227,36 @@ public sealed class AnalysisRunner(
     private static void Report(IProgress<RunProgress>? progress, int runId, string stage, MutableCounts counts, string? current) =>
         progress?.Report(new RunProgress(runId, stage, counts.Snapshot(), current is null ? null : Path.GetFileName(current)));
 
+    private sealed record PreparedMedia(MediaFile Media, IReadOnlyList<PreparedImage> Images, string? Error);
+
+    /// <summary>Counters shared by the producer and consumer tasks.</summary>
     private sealed class MutableCounts
     {
-        public int MediaFiles { get; set; }
+        private readonly Lock _lock = new();
+        private RunCounts _counts = new(0, 0, 0, 0, 0, 0, 0);
 
-        public int Images { get; set; }
+        public void Add(int mediaFiles = 0, int images = 0, int duplicates = 0, int analyzed = 0, int noOutfit = 0, int failed = 0, int fromCache = 0)
+        {
+            lock (_lock)
+            {
+                var c = _counts;
+                _counts = new RunCounts(
+                    c.MediaFiles + mediaFiles,
+                    c.Images + images,
+                    c.Duplicates + duplicates,
+                    c.Analyzed + analyzed,
+                    c.NoOutfit + noOutfit,
+                    c.Failed + failed,
+                    c.FromCache + fromCache);
+            }
+        }
 
-        public int Duplicates { get; set; }
-
-        public int Analyzed { get; set; }
-
-        public int NoOutfit { get; set; }
-
-        public int Failed { get; set; }
-
-        public int FromCache { get; set; }
-
-        public RunCounts Snapshot() => new(MediaFiles, Images, Duplicates, Analyzed, NoOutfit, Failed, FromCache);
+        public RunCounts Snapshot()
+        {
+            lock (_lock)
+            {
+                return _counts;
+            }
+        }
     }
 }
