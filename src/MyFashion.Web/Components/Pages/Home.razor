@@ -1,7 +1,191 @@
 ﻿@page "/"
+@using MyFashion.Core.Instagram
+@implements IDisposable
+@inject IAnalysisReader Reader
+@inject AnalysisJobService Jobs
+@inject SystemCheck Checker
+@inject NavigationManager Navigation
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Analizler · myfashion</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="page-header">
+    <h1>Analizler</h1>
+    <p class="muted">Bir hesabın ekran görüntülerini ve ekran kayıtlarını analiz et, stilini çıkar.</p>
+</div>
 
-Welcome to your new app.
+<div class="stack">
+    @if (_status is { AllOk: false })
+    {
+        <div class="notice notice--warning" role="status">
+            <strong>Kurulum eksik</strong>. Analiz başlamadan önce şunları yap:
+            <ul>
+                @foreach (var fix in _status.Fixes)
+                {
+                    <li><code>@fix</code></li>
+                }
+            </ul>
+            <button type="button" class="button button--secondary" style="margin-top: var(--space-3)" @onclick="CheckSystemAsync">Tekrar kontrol et</button>
+        </div>
+    }
+
+    <section class="card" aria-labelledby="new-title">
+        <h2 id="new-title">Yeni analiz</h2>
+        <form @onsubmit="StartAsync" novalidate>
+            <div class="field">
+                <label for="account">Instagram hesabı</label>
+                <input id="account" type="text" @bind="_account" placeholder="instagram.com/kullaniciadi ya da @@kullaniciadi"
+                       autocomplete="off" spellcheck="false"
+                       aria-invalid="@(_accountError is not null)" aria-describedby="account-hint account-error" />
+                <span id="account-hint" class="hint">Rapor bu isimle kaydedilir.</span>
+                @if (_accountError is not null)
+                {
+                    <span id="account-error" class="field-error">@_accountError</span>
+                }
+            </div>
+            <div class="field">
+                <label for="folder">Ekran görüntüleri ve kayıtların klasörü</label>
+                <input id="folder" type="text" @bind="_folder" placeholder="/Users/sen/Desktop/hesap-adi"
+                       autocomplete="off" spellcheck="false" class="mono"
+                       aria-invalid="@(_folderError is not null)" aria-describedby="folder-hint folder-error" />
+                <span id="folder-hint" class="hint">
+                    Finder'da klasörü seç, <kbd>⌥ Option</kbd> + <kbd>⌘ Cmd</kbd> + <kbd>C</kbd> ile yolunu kopyala.
+                    Alt klasör adları türü belirler: <code>posts</code>, <code>reels</code>, <code>highlights</code>.
+                </span>
+                @if (_folderError is not null)
+                {
+                    <span id="folder-error" class="field-error">@_folderError</span>
+                }
+            </div>
+            <div class="actions">
+                <button type="submit" class="button button--primary">Analizi başlat</button>
+            </div>
+        </form>
+    </section>
+
+    @if (_recentJobs.Count > 0)
+    {
+        <section class="card" aria-labelledby="jobs-title">
+            <h2 id="jobs-title">Son işler</h2>
+            <ul class="list">
+                @foreach (var job in _recentJobs)
+                {
+                    <li class="bar__label">
+                        <a href="@($"jobs/{job.Id}")">@job.Account</a>
+                        <span class="badge">@JobText(job)</span>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
+    <section aria-labelledby="accounts-title">
+        <h2 id="accounts-title">Hesaplar</h2>
+        @if (_accountsError is not null)
+        {
+            <ErrorState Message="@_accountsError" OnRetry="LoadAccountsAsync" />
+        }
+        else if (_accounts is null)
+        {
+            <LoadingState Title="Hesaplar yükleniyor…" />
+        }
+        else if (_accounts.Count == 0)
+        {
+            <EmptyState Title="Henüz analiz yok" Detail="Yukarıdaki formdan ilk analizini başlat." />
+        }
+        else
+        {
+            <div class="grid">
+                @foreach (var account in _accounts)
+                {
+                    <a class="card" href="@($"accounts/{Uri.EscapeDataString(account.Username)}")" style="text-decoration: none; color: inherit">
+                        <h3>@account.Username</h3>
+                        <p class="muted small" style="margin: 0">@account.AnalyzedImages görsel · @account.Runs analiz · son: @Labels.Date(account.LastRunAt)</p>
+                    </a>
+                }
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private string? _account;
+    private string? _folder;
+    private string? _accountError;
+    private string? _folderError;
+    private string? _accountsError;
+    private IReadOnlyList<AccountOverview>? _accounts;
+    private IReadOnlyList<AnalysisJob> _recentJobs = [];
+    private SystemStatus? _status;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Jobs.Changed += OnJobChanged;
+        _recentJobs = Jobs.Recent();
+        await Task.WhenAll(LoadAccountsAsync(), CheckSystemAsync());
+    }
+
+    private async Task LoadAccountsAsync()
+    {
+        _accountsError = null;
+        try
+        {
+            _accounts = await Reader.GetAccountsAsync(CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            _accountsError = "Hesaplar okunamadı: " + ex.Message;
+        }
+    }
+
+    private async Task CheckSystemAsync() => _status = await Checker.CheckAsync(CancellationToken.None);
+
+    private void StartAsync()
+    {
+        _accountError = null;
+        _folderError = null;
+
+        if (!InstagramUsername.TryParse(_account, out var username, out var accountError))
+        {
+            _accountError = accountError;
+        }
+
+        var folder = _folder?.Trim().Trim('"', '\'');
+        if (string.IsNullOrEmpty(folder))
+        {
+            _folderError = "Klasör yolunu gir.";
+        }
+        else if (!Path.IsPathFullyQualified(folder))
+        {
+            _folderError = "Tam yol gir (/Users/... ile başlamalı).";
+        }
+        else if (!Directory.Exists(folder))
+        {
+            _folderError = "Bu klasör bulunamadı.";
+        }
+
+        if (_accountError is not null || _folderError is not null || username is null)
+        {
+            return;
+        }
+
+        var job = Jobs.Enqueue(username.Value, Path.GetFullPath(folder!));
+        Navigation.NavigateTo($"jobs/{job.Id}");
+    }
+
+    private void OnJobChanged(AnalysisJob job) => _ = InvokeAsync(() =>
+    {
+        _recentJobs = Jobs.Recent();
+        StateHasChanged();
+    });
+
+    private static string JobText(AnalysisJob job) => job.Status switch
+    {
+        JobStatus.Queued => "Sırada",
+        JobStatus.Running => $"Sürüyor · {job.Progress?.Counts.Analyzed ?? 0} görsel",
+        JobStatus.Completed => "Tamamlandı",
+        JobStatus.Failed => "Başarısız",
+        _ => "İptal edildi",
+    };
+
+    public void Dispose() => Jobs.Changed -= OnJobChanged;
+}

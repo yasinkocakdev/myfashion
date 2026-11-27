@@ -1,0 +1,35 @@
+@if (Items.Count == 0)
+{
+    <p class="muted small">@EmptyText</p>
+}
+else
+{
+    <ul class="bars">
+        @foreach (var item in Items.Take(Max))
+        {
+            <li>
+                <div class="bar__label">
+                    <span>@Labels.Translate(item.Name)</span>
+                    <span class="muted">@item.Count · %@item.Percent.ToString("0.#", CultureInfo.InvariantCulture)</span>
+                </div>
+                <div class="bar__track" aria-hidden="true">
+                    <div class="bar__fill" style="width: @Width(item.Percent)"></div>
+                </div>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Share> Items { get; set; } = [];
+
+    [Parameter]
+    public int Max { get; set; } = 8;
+
+    [Parameter]
+    public string EmptyText { get; set; } = "Henüz veri yok.";
+
+    private static string Width(double percent) =>
+        Math.Clamp(percent, 0, 100).ToString("0.#", CultureInfo.InvariantCulture) + "%";
+}

@@ -1,0 +1,103 @@
+@page "/settings"
+@inject IPreferencesStore Preferences
+
+<PageTitle>Ayarlar · myfashion</PageTitle>
+
+<div class="page-header">
+    <h1>Ayarlar</h1>
+    <p class="muted">Öneriler bu bilgilere göre hazırlanır. Hepsi isteğe bağlıdır ve yalnızca bu bilgisayarda saklanır.</p>
+</div>
+
+@if (_model is null)
+{
+    <LoadingState />
+}
+else
+{
+    <section class="card">
+        <form @onsubmit="SaveAsync">
+            <div class="grid grid--2">
+                <div class="field">
+                    <label for="gender">Cinsiyet / kesim tercihi</label>
+                    <input id="gender" type="text" @bind="_model.Gender" maxlength="100" placeholder="ör. erkek, kadın, unisex" />
+                </div>
+                <div class="field">
+                    <label for="sizes">Bedenler</label>
+                    <input id="sizes" type="text" @bind="_model.Sizes" maxlength="100" placeholder="ör. üst M, pantolon 32, ayakkabı 43" />
+                </div>
+                <div class="field">
+                    <label for="budget">Bütçe</label>
+                    <input id="budget" type="text" @bind="_model.Budget" maxlength="100" placeholder="ör. parça başı 1.500 TL'ye kadar" />
+                </div>
+            </div>
+
+            <fieldset class="field" style="border: 0; padding: 0; margin: var(--space-5) 0 0">
+                <legend style="font-size: var(--text-sm); font-weight: var(--weight-medium); margin-bottom: var(--space-2)">Arama linki üretilecek mağazalar</legend>
+                <div class="checkbox-row">
+                    @foreach (var (id, name) in StoreCatalog.All)
+                    {
+                        <label><input type="checkbox" checked="@_model.Stores.Contains(id)" @onchange="e => Toggle(id, e)" /> @name</label>
+                    }
+                </div>
+            </fieldset>
+
+            <div class="field" style="margin-top: var(--space-4)">
+                <label for="notes">Notlar</label>
+                <textarea id="notes" rows="3" @bind="_model.Notes" maxlength="500" placeholder="ör. ofiste giyebileceğim parçalar istiyorum, logo sevmem"></textarea>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="button button--primary">Kaydet</button>
+            </div>
+            <div role="status" aria-live="polite">
+                @if (_saved)
+                {
+                    <p class="notice notice--success" style="margin-top: var(--space-4)">Kaydedildi.</p>
+                }
+            </div>
+        </form>
+    </section>
+}
+
+@code {
+    private Model? _model;
+    private bool _saved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var prefs = await Preferences.GetAsync(CancellationToken.None);
+        _model = new Model { Gender = prefs.Gender, Sizes = prefs.Sizes, Budget = prefs.Budget, Notes = prefs.Notes, Stores = [.. prefs.Stores] };
+    }
+
+    private void Toggle(string id, ChangeEventArgs e)
+    {
+        _saved = false;
+        if (e.Value is true)
+        {
+            _model!.Stores.Add(id);
+        }
+        else
+        {
+            _model!.Stores.Remove(id);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        await Preferences.SaveAsync(new UserPreferences(_model!.Gender, _model.Sizes, _model.Budget, [.. _model.Stores], _model.Notes), CancellationToken.None);
+        _saved = true;
+    }
+
+    private sealed class Model
+    {
+        public string? Gender { get; set; }
+
+        public string? Sizes { get; set; }
+
+        public string? Budget { get; set; }
+
+        public string? Notes { get; set; }
+
+        public HashSet<string> Stores { get; init; } = [];
+    }
+}

@@ -76,3 +76,16 @@ Projedeki önemli kararların kısa notları. Her not: **bu neydi, neden böyle 
 - **Linkleri model değil kod üretir (`StoreCatalog`).** Model sadece "ne aranacağını" söyler. O metin harf, rakam ve tire dışındaki her şeyden temizlenir, URL için kodlanır (`Uri.EscapeDataString`) ve izin listesindeki sabit mağaza şablonlarına yerleştirilir. Model `https://kotu-site` yazsa bile bu adres link olmaz, sadece arama kelimesine dönüşür. Kullanıcının tıklayacağı her şeyin kaynağına güvenebilmek gerekir.
 - **`ProfilePromptWriter`**, binlerce parçalık analizi modele ham hâliyle göndermek yerine birkaç satırlık özet hâlinde verir: palet, kategoriler, markalar, formüller. Kısa ve net girdi hem daha hızlı hem daha tutarlı cevap getirir.
 - **Testin yakaladığı hata:** Model `search_query` alanını `""` olarak döndürdüğünde `?? name` çalışmıyordu, çünkü `??` sadece `null` için devreye girer, boş metin için değil. Çözüm, temizlenmiş sorgunun uzunluğuna bakmak oldu.
+
+## 12. Web arayüzü (`feat(web): ...`, `style(web): add design tokens and component styles`)
+
+- **Arka plan iş kuyruğu (`AnalysisJobService`):** Analiz dakikalar sürebilir. Bu yüzden düğmeye basınca iş bir `Channel`'a (thread-safe kuyruk) yazılır ve bir `BackgroundService` onu sırayla işler. Sayfa `Changed` olayına abone olur, ekranı `InvokeAsync(StateHasChanged)` ile günceller. İş durumu değiştirilemeyen bir `record` olarak tutulur; birden fazla thread aynı nesneyi okurken yarım güncellenmiş bir hâlini görmez.
+- **Gösterim bileşenleri ve sayfalar ayrı:** `ProfileReport`, `RecommendationsView` ve `JobProgressView` sadece parametre alıp çizer; veriyi sayfalar getirir. Bu sayede bUnit testleri veritabanı ya da servis olmadan çalışır.
+- **Her ekranın üç durumu ayrı tasarlandı:** yükleniyor (`LoadingState`, `aria-busy`), boş (`EmptyState`, ne yapılacağını söyleyen bir eylemle) ve hata (`ErrorState`, `role="alert"` ve "Tekrar dene").
+- **Güvenlik:**
+  - Uygulama yalnızca `127.0.0.1`'de dinler. `AllowedHosts` başka bir host adıyla gelen isteği reddeder; bu, DNS rebinding saldırısına karşı korur. Testte `Host: evil.example` → 400.
+  - CSP yalnızca uygulamanın kendi script'lerine izin verir. Blazor'un inline import map'i CSP'ye takıldığı için kaldırıldı, CSP gevşetilmedi.
+  - Görseller `/media/...` uç noktasından yalnızca `.jpg` olarak ve `PathGuard` kontrolünden geçerek sunulur (`..%2F..` → 404).
+  - Veri klasörü `700` izinlidir; başkasının fotoğraflarını bilgisayardaki başka kullanıcılar okuyamaz.
+  - Model çıktısı ve açıklamalar Blazor tarafından otomatik kodlanır. Testte `<script>` marka adı metin olarak görünür, çalışmaz.
+- **Erişilebilirlik:** Sayfanın başında "İçeriğe geç" linki var. Her form alanının bir `label`'ı var, hatalar `aria-describedby` ile alana bağlı. Renk paletinin metin karşılığı var (`role="img"` + `aria-label`). Görsellerin `alt` metni kişiyi değil kıyafeti anlatır. Yeni sekmede açılan linkler `rel="noopener noreferrer"` kullanır ve bunu ekran okuyucuya söyler.

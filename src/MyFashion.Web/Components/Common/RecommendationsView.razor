@@ -1,0 +1,62 @@
+@if (Value.ShoppingList.Count == 0 && Value.Outfits.Count == 0)
+{
+    <EmptyState Title="Öneri çıkmadı" Detail="Model bu profil için öneri üretmedi. Daha fazla görsel analiz edip tekrar dene." />
+}
+else
+{
+    <div class="grid grid--2">
+        <section class="card" aria-labelledby="shopping-title">
+            <h3 id="shopping-title">Alışveriş listesi</h3>
+            <ol class="list">
+                @foreach (var item in Value.ShoppingList)
+                {
+                    <li>
+                        <div class="bar__label">
+                            <strong>@item.Item</strong>
+                            <span class="badge @(item.Priority == 1 ? "badge--accent" : "")">@PriorityText(item.Priority)</span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(item.Why))
+                        {
+                            <p class="small muted" style="margin: var(--space-1) 0 var(--space-2)">@item.Why</p>
+                        }
+                        <ul class="chips" aria-label="@($"{item.Item} için mağazalarda ara")">
+                            @foreach (var link in item.Links)
+                            {
+                                <li><a class="badge" href="@link.Url" target="_blank" rel="noopener noreferrer">@link.Store <span class="visually-hidden">(yeni sekmede açılır)</span></a></li>
+                            }
+                        </ul>
+                    </li>
+                }
+            </ol>
+        </section>
+
+        <section class="card" aria-labelledby="outfits-title">
+            <h3 id="outfits-title">Kombin önerileri</h3>
+            <ul class="list">
+                @foreach (var outfit in Value.Outfits)
+                {
+                    <li>
+                        <div class="bar__label"><strong>@outfit.Name</strong>@if (!string.IsNullOrEmpty(outfit.Occasion)) { <span class="badge">@outfit.Occasion</span> }</div>
+                        <p class="small" style="margin: var(--space-1) 0">@string.Join(" · ", outfit.Pieces)</p>
+                        @if (!string.IsNullOrEmpty(outfit.Why))
+                        {
+                            <p class="small muted" style="margin: 0">@outfit.Why</p>
+                        }
+                    </li>
+                }
+            </ul>
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Recommendations Value { get; set; } = Recommendations.Empty;
+
+    private static string PriorityText(int priority) => priority switch
+    {
+        1 => "Önce bunu al",
+        2 => "Sonra",
+        _ => "İsteğe bağlı",
+    };
+}

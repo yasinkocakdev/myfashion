@@ -1,0 +1,19 @@
+<div class="state">
+    <p class="state__title">@Title</p>
+    @if (!string.IsNullOrEmpty(Detail))
+    {
+        <p class="small">@Detail</p>
+    }
+    @ChildContent
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Detail { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

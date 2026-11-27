@@ -1,0 +1,61 @@
+@page "/jobs/{Id:guid}"
+@implements IDisposable
+@inject AnalysisJobService Jobs
+
+<PageTitle>Analiz · myfashion</PageTitle>
+
+<div class="page-header">
+    <h1>Analiz</h1>
+    <p class="muted">Analiz arka planda sürer; bu sayfadan ayrılabilirsin.</p>
+</div>
+
+@if (_job is null)
+{
+    <EmptyState Title="Bu iş bulunamadı" Detail="Uygulama yeniden başlatıldıysa iş listesi sıfırlanır. Kaydedilen sonuçlar hesap sayfasında durur.">
+        <a class="button button--secondary" href="">Analizlere dön</a>
+    </EmptyState>
+}
+else
+{
+    <div class="stack">
+        <JobProgressView Job="_job" />
+        <div class="actions">
+            @if (!_job.IsFinished)
+            {
+                <button type="button" class="button button--danger" @onclick="Cancel">Analizi durdur</button>
+            }
+            @if (_job.Status is JobStatus.Completed or JobStatus.Cancelled || (_job.Progress?.Counts.Analyzed ?? 0) > 0)
+            {
+                <a class="button button--primary" href="@($"accounts/{Uri.EscapeDataString(_job.Account)}")">Raporu gör</a>
+            }
+            <a class="button button--secondary" href="">Analizlere dön</a>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private AnalysisJob? _job;
+
+    protected override void OnInitialized() => Jobs.Changed += OnChanged;
+
+    protected override void OnParametersSet() => _job = Jobs.Get(Id);
+
+    private void Cancel() => Jobs.Cancel(Id);
+
+    private void OnChanged(AnalysisJob job)
+    {
+        if (job.Id == Id)
+        {
+            _ = InvokeAsync(() =>
+            {
+                _job = job;
+                StateHasChanged();
+            });
+        }
+    }
+
+    public void Dispose() => Jobs.Changed -= OnChanged;
+}

@@ -1,0 +1,158 @@
+@using MyFashion.Web.Endpoints
+
+@if (Profile.IsEmpty)
+{
+    <EmptyState Title="Bu hesap için henüz kıyafet bulunamadı"
+                Detail="Analiz bitmemiş olabilir ya da görsellerde kıyafet görünmüyor olabilir. Yeni bir analiz başlatmayı dene." />
+}
+else
+{
+    <div class="stack">
+        <section class="card" aria-labelledby="summary-title">
+            <h2 id="summary-title">Özet</h2>
+            <dl class="stat-row">
+                <div class="stat"><dt>Görsel</dt><dd>@Profile.ImagesWithOutfit</dd></div>
+                <div class="stat"><dt>Parça</dt><dd>@Profile.GarmentCount</dd></div>
+                <div class="stat"><dt>Marka</dt><dd>@Profile.Brands.Count</dd></div>
+                @foreach (var (kind, count) in Profile.ImagesByKind.OrderByDescending(k => k.Value))
+                {
+                    <div class="stat"><dt>@Labels.Kind(kind)</dt><dd>@count</dd></div>
+                }
+            </dl>
+            @if (Profile.StyleTags.Count > 0)
+            {
+                <p class="muted small" style="margin-top: var(--space-4)">Baskın tarz</p>
+                <ul class="chips" aria-label="Stil etiketleri">
+                    @foreach (var tag in Profile.StyleTags.Take(6))
+                    {
+                        <li class="badge badge--accent">@Labels.Translate(tag.Name) · %@tag.Percent.ToString("0", CultureInfo.InvariantCulture)</li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="card" aria-labelledby="palette-title">
+            <h2 id="palette-title">Renk paleti</h2>
+            <div class="palette" role="img" aria-label="@PaletteDescription">
+                @foreach (var color in Profile.Palette)
+                {
+                    <div class="palette__swatch" style="flex: @Flex(color.Percent); background: @color.Hex" title="@Labels.Translate(color.Color)"></div>
+                }
+            </div>
+            <ul class="swatch-list">
+                @foreach (var color in Profile.Palette.Take(10))
+                {
+                    <li><span class="dot" style="background: @color.Hex" aria-hidden="true"></span>@Labels.Translate(color.Color) <span class="muted">%@color.Percent.ToString("0.#", CultureInfo.InvariantCulture)</span></li>
+                }
+            </ul>
+        </section>
+
+        <div class="grid grid--2">
+            <section class="card" aria-labelledby="categories-title">
+                <h2 id="categories-title">Ne giyiyor?</h2>
+                <ul class="list">
+                    @foreach (var category in Profile.Categories)
+                    {
+                        <li>
+                            <div class="bar__label"><strong>@Labels.Category(category.Category)</strong><span class="muted">%@category.Percent.ToString("0.#", CultureInfo.InvariantCulture)</span></div>
+                            <span class="small muted">@string.Join(", ", category.TopTypes.Select(t => $"{t.Name} ({t.Count})"))</span>
+                        </li>
+                    }
+                </ul>
+            </section>
+
+            <section class="card" aria-labelledby="brands-title">
+                <h2 id="brands-title">Markalar</h2>
+                @if (Profile.Brands.Count == 0)
+                {
+                    <p class="muted small">Görünür bir logo, yazı ya da açıklamada geçen marka bulunamadı. Uydurma marka göstermemek için yalnızca kanıtı olanlar listelenir.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead><tr><th scope="col">Marka</th><th scope="col">Kanıt</th><th scope="col" class="num">Adet</th></tr></thead>
+                            <tbody>
+                                @foreach (var brand in Profile.Brands)
+                                {
+                                    <tr>
+                                        <td>@brand.Brand</td>
+                                        <td>@string.Join(", ", brand.Evidence.Select(Labels.Evidence))</td>
+                                        <td class="num">@brand.Count</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="signature-title">
+                <h2 id="signature-title">İmza parçalar</h2>
+                <ShareBars Items="Profile.SignaturePieces" EmptyText="Birden fazla kez görülen bir parça yok." />
+            </section>
+
+            <section class="card" aria-labelledby="formulas-title">
+                <h2 id="formulas-title">Kombin formülleri</h2>
+                @if (Profile.Formulas.Count == 0)
+                {
+                    <p class="muted small">Tekrar eden bir kombin bulunamadı. Daha fazla görsel analiz edildikçe ortaya çıkar.</p>
+                }
+                else
+                {
+                    <ul class="list">
+                        @foreach (var formula in Profile.Formulas)
+                        {
+                            <li>@string.Join(" + ", formula.Pieces.Select(Labels.Translate)) <span class="badge">@formula.Count kez</span></li>
+                        }
+                    </ul>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="fit-title">
+                <h2 id="fit-title">Kesim</h2>
+                <ShareBars Items="Profile.Fits" />
+            </section>
+
+            <section class="card" aria-labelledby="pattern-title">
+                <h2 id="pattern-title">Desen</h2>
+                <ShareBars Items="Profile.Patterns" />
+            </section>
+        </div>
+
+        @if (Images.Count > 0)
+        {
+            <section class="card" aria-labelledby="gallery-title">
+                <h2 id="gallery-title">Analiz edilen görseller</h2>
+                <p class="muted small">En fazla @MaxImages görsel gösteriliyor.</p>
+                <ul class="gallery">
+                    @foreach (var image in Images.Where(i => i.PreparedPath is not null).Take(MaxImages))
+                    {
+                        var pieces = string.Join(", ", image.Garments.Select(g => $"{Labels.Translate(g.Color)} {g.Type}"));
+                        <li>
+                            <figure>
+                                <img src="@MediaEndpoints.UrlFor(image.PreparedPath!)" alt="Kıyafetler: @pieces" loading="lazy" decoding="async" />
+                                <figcaption>@Labels.Kind(image.Kind) · @pieces</figcaption>
+                            </figure>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+    </div>
+}
+
+@code {
+    private const int MaxImages = 24;
+
+    [Parameter, EditorRequired]
+    public StyleProfile Profile { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<AnalyzedImage> Images { get; set; } = [];
+
+    private string PaletteDescription =>
+        "Renk paleti: " + string.Join(", ", Profile.Palette.Take(6).Select(c => $"{Labels.Translate(c.Color)} yüzde {c.Percent.ToString("0", CultureInfo.InvariantCulture)}"));
+
+    private static string Flex(double percent) => Math.Max(percent, 0.5).ToString("0.#", CultureInfo.InvariantCulture);
+}

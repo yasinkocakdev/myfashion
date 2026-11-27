@@ -34,3 +34,6 @@ docs/*.pdf
 
 # macOS
 .DS_Store
+
+# Local editor/agent settings
+.claude/

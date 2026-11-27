@@ -1,0 +1,64 @@
+@{
+    var counts = Job.Progress?.Counts;
+}
+
+<section class="card" aria-labelledby="job-title">
+    <div class="bar__label">
+        <h2 id="job-title">@Job.Account</h2>
+        <span class="badge @StatusClass">@StatusText</span>
+    </div>
+    <p class="muted small mono">@Job.Folder</p>
+
+    @if (!Job.IsFinished)
+    {
+        <div role="status" aria-live="polite">
+            <p>@(Job.Status == JobStatus.Queued ? "Sırada bekliyor…" : Job.Progress?.Stage ?? "Başlıyor…")
+                @if (Job.Progress?.CurrentItem is { } current)
+                {
+                    <span class="muted small mono"> · @current</span>
+                }
+            </p>
+        </div>
+        <div class="progress" aria-hidden="true"><div class="progress__bar"></div></div>
+    }
+
+    @if (counts is not null)
+    {
+        <dl class="stat-row" style="margin-top: var(--space-5)">
+            <div class="stat"><dt>Dosya</dt><dd>@counts.MediaFiles</dd></div>
+            <div class="stat"><dt>Görsel/kare</dt><dd>@counts.Images</dd></div>
+            <div class="stat"><dt>Benzer, elendi</dt><dd>@counts.Duplicates</dd></div>
+            <div class="stat"><dt>Kıyafet bulundu</dt><dd>@counts.Analyzed</dd></div>
+            <div class="stat"><dt>Kıyafet yok</dt><dd>@counts.NoOutfit</dd></div>
+            <div class="stat"><dt>Önbellekten</dt><dd>@counts.FromCache</dd></div>
+            <div class="stat"><dt>Hatalı</dt><dd>@counts.Failed</dd></div>
+        </dl>
+    }
+
+    @if (Job.Status == JobStatus.Failed)
+    {
+        <div class="notice notice--error" role="alert" style="margin-top: var(--space-4)">@Job.Error</div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public AnalysisJob Job { get; set; } = default!;
+
+    private string StatusText => Job.Status switch
+    {
+        JobStatus.Queued => "Sırada",
+        JobStatus.Running => "Analiz ediliyor",
+        JobStatus.Completed => "Tamamlandı",
+        JobStatus.Failed => "Başarısız",
+        _ => "İptal edildi",
+    };
+
+    private string StatusClass => Job.Status switch
+    {
+        JobStatus.Completed => "badge--success",
+        JobStatus.Failed => "badge--danger",
+        JobStatus.Running => "badge--accent",
+        _ => string.Empty,
+    };
+}
