@@ -1,0 +1,3 @@
+[*.cs]
+# Test method names use underscores to read like sentences (Method_condition_result).
+dotnet_diagnostic.CA1707.severity = none

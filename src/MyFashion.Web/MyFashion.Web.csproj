@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MyFashion.Core\MyFashion.Core.csproj" />
+    <ProjectReference Include="..\MyFashion.Infrastructure\MyFashion.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyFashion.Tests" />
+  </ItemGroup>
+
+</Project>

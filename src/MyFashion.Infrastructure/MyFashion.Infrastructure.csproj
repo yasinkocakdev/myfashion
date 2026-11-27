@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Everything that touches the outside world: processes, HTTP, files, SQLite. -->
+  <ItemGroup>
+    <ProjectReference Include="..\MyFashion.Core\MyFashion.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyFashion.Tests" />
+  </ItemGroup>
+
+</Project>
