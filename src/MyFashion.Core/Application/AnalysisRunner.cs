@@ -11,7 +11,15 @@ namespace MyFashion.Core.Application;
 /// <param name="DuplicateDistance">dHash distance at or below which two images count as the same.</param>
 /// <param name="MaxConsecutiveFailures">Stop the run when this many images fail in a row (for example Ollama is down).</param>
 /// <param name="PrefetchCapacity">How many media files may be prepared ahead while the model is busy.</param>
-public sealed record AnalysisRunnerOptions(string DataRoot, int DuplicateDistance = 6, int MaxConsecutiveFailures = 5, int PrefetchCapacity = 4);
+/// <param name="MinFreeDiskBytes">Stop before the disk under <paramref name="DataRoot"/> has less free space than this.</param>
+/// <param name="FreeDiskBytes">Measures free space; null uses the real disk. Replaceable in tests.</param>
+public sealed record AnalysisRunnerOptions(
+    string DataRoot,
+    int DuplicateDistance = 6,
+    int MaxConsecutiveFailures = 5,
+    int PrefetchCapacity = 4,
+    long MinFreeDiskBytes = 2L * 1024 * 1024 * 1024,
+    Func<string, long>? FreeDiskBytes = null);
 
 /// <summary>
 /// Runs one analysis: media → prepared images → near-duplicate filter → cache or model → store.
@@ -104,6 +112,7 @@ public sealed class AnalysisRunner(
             {
                 index++;
                 counts.Add(mediaFiles: 1);
+                EnsureFreeDiskSpace();
                 PreparedMedia item;
                 try
                 {
@@ -125,6 +134,19 @@ public sealed class AnalysisRunner(
             writer.TryComplete(ex);
         }
     }
+
+    private void EnsureFreeDiskSpace()
+    {
+        var free = (options.FreeDiskBytes ?? RealFreeBytes)(options.DataRoot);
+        if (free < options.MinFreeDiskBytes)
+        {
+            throw new IOException(string.Create(
+                System.Globalization.CultureInfo.InvariantCulture,
+                $"Diskte yeterli boş alan yok ({free / (1024.0 * 1024 * 1024):0.0} GB). Analiz durduruldu; biraz yer açıp tekrar başlat, kalan dosyalar önbellekten devam eder."));
+        }
+    }
+
+    private static long RealFreeBytes(string path) => new DriveInfo(Path.GetFullPath(path)).AvailableFreeSpace;
 
     private static async Task StopProducerAsync(CancellationTokenSource stop, Task producer)
     {

@@ -163,6 +163,25 @@ public sealed class AnalysisRunnerTests : IDisposable
         Assert.Contains("yok", run.Error, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Stops_with_a_clear_message_when_the_disk_is_almost_full()
+    {
+        var media = new[] { Image("a.jpg", "hash=0;id=coat"), Image("b.jpg", "hash=4294967295;id=jeans") };
+        var free = 10L * 1024 * 1024 * 1024;
+        var options = new AnalysisRunnerOptions(_root, MinFreeDiskBytes: 2L * 1024 * 1024 * 1024, FreeDiskBytes: _ => free);
+        // Preparing a.jpg "fills" the disk, so the check before b.jpg fails deterministically.
+        var toolkit = new FakeToolkit { OnPrepare = _ => free = 1L * 1024 * 1024 * 1024 };
+        var runner = new AnalysisRunner(toolkit, _analyzer, _store, options);
+
+        var ex = await Assert.ThrowsAsync<IOException>(() =>
+            runner.RunAsync("hesap", new FakeSource(media), RunSource.Folder, null, TestContext.Current.CancellationToken));
+
+        Assert.Contains("boş alan", ex.Message, StringComparison.Ordinal);
+        var run = Assert.Single(_store.Runs.Values);
+        Assert.Equal(RunStatus.Failed, run.Status);
+        Assert.Equal(1, run.Counts!.Analyzed);
+    }
+
     [Theory]
     [InlineData("some.user", "some.user")]
     [InlineData("Öne çıkanlar/../x", "Öne_çıkanlar_.._x")]
