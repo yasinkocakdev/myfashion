@@ -1,8 +1,8 @@
-# stil-analizi
+# myfashion
 
 Kıyafet fotoğraflarından **stil profili** çıkaran, bunu alışveriş listesi ve kombin önerilerine dönüştüren, kendi bilgisayarında çalışan bir C# uygulaması.
 
-> **Durum: Beklemede.** Şu an 6 aylık C# öğrenme planıma odaklanıyorum. stil-analizi, bu plan tamamlandıktan sonra (tahmini Mayıs 2027) geliştirilecek. Tasarım ve yol haritası hazır durumda.
+> **Durum: Aktif geliştirme.** İlk çalışan sürüm (MVP) `improve/mvp` dalında inşa ediliyor.
 
 ## Hangi problemi çözüyor?
 
