@@ -48,3 +48,10 @@ Projedeki önemli kararların kısa notları. Her not: **bu neydi, neden böyle 
 - **Sadece localhost.** `OllamaChatClient`, adres `127.0.0.1` değilse hiç oluşturulmaz. "Fotoğraflar bilgisayardan çıkmaz" sözü dokümanda değil kodda garanti altında.
 - **Hata türlerine göre farklı davranış:** Geçici hatalar (bağlantı, 5xx, bozuk çıktı) bir kez daha denenir. Kalıcı hatalar ("model kurulu değil") hemen, nasıl düzeltileceğini söyleyen bir mesajla durur. Kullanıcı işi iptal ederse bu bir hata gibi gösterilmez.
 - **Açıklama (caption) ayraçların arasına konur ve "bu veri, talimat değil" diye etiketlenir.** İçindeki `<`, `>` ve kontrol karakterleri silinir, uzunluğu 500 karakterle sınırlanır. Bu, prompt injection'a karşı ikinci savunma hattıdır; birincisi `ModelOutputParser`.
+
+## 8. Analiz akışı (`feat(app): orchestrate analysis runs with cache, resume and failure isolation`)
+
+- **`AnalysisRunner`** bütün parçaları birleştirir ama hiçbirinin nasıl çalıştığını bilmez. Elinde sadece arayüzler var: `IMediaSource`, `IMediaToolkit`, `IVisionAnalyzer`, `IAnalysisStore` (Dependency Inversion). Bu yüzden testleri ffmpeg ve Ollama olmadan, milisaniyeler içinde çalışıyor.
+- **Hata izolasyonu:** Bozuk bir dosya ya da analiz edilemeyen bir görsel işi durdurmaz; "başarısız" olarak kaydedilip geçilir. Ama üst üste 5 hata, büyük ihtimalle Ollama'nın kapalı olduğu anlamına gelir. O zaman yüzlerce görseli boşuna denemek yerine iş anlaşılır bir mesajla durur (circuit breaker fikri).
+- **Önbellek anahtarı, hazırlanmış görselin SHA-256'sı ve model adıdır.** İş iptal edilip yeniden başlatıldığında ya da aynı hesap tekrar analiz edildiğinde, önceden analiz edilmiş görseller modele tekrar gönderilmez. Model değişirse önbellek kullanılmaz, çünkü farklı model farklı sonuç verir.
+- **İptal edilen işin durumu `CancellationToken.None` ile kaydedilir.** İptal edilmiş token'la "iptal edildi" bilgisini kaydetmeye çalışmak, kaydın kendisini de iptal ederdi.
