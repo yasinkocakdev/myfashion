@@ -1,0 +1,8 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Pure domain and application logic. No external dependencies. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyFashion.Tests" />
+  </ItemGroup>
+
+</Project>

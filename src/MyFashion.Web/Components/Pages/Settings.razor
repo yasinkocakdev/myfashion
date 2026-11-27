@@ -1,0 +1,200 @@
+@page "/settings"
+@using MyFashion.Infrastructure.Instagram
+@inject IPreferencesStore Preferences
+@inject InstagramCredentialStore Credentials
+@inject InstagramGraphClient Graph
+
+<PageTitle>Ayarlar · myfashion</PageTitle>
+
+<div class="page-header">
+    <h1>Ayarlar</h1>
+    <p class="muted">Öneriler bu bilgilere göre hazırlanır. Hepsi isteğe bağlıdır ve yalnızca bu bilgisayarda saklanır.</p>
+</div>
+
+@if (_model is null)
+{
+    <LoadingState />
+}
+else
+{
+    <section class="card">
+        <form @onsubmit="SaveAsync">
+            <div class="grid grid--2">
+                <div class="field">
+                    <label for="gender">Cinsiyet / kesim tercihi</label>
+                    <input id="gender" type="text" @bind="_model.Gender" maxlength="100" placeholder="ör. erkek, kadın, unisex" />
+                </div>
+                <div class="field">
+                    <label for="sizes">Bedenler</label>
+                    <input id="sizes" type="text" @bind="_model.Sizes" maxlength="100" placeholder="ör. üst M, pantolon 32, ayakkabı 43" />
+                </div>
+                <div class="field">
+                    <label for="budget">Bütçe</label>
+                    <input id="budget" type="text" @bind="_model.Budget" maxlength="100" placeholder="ör. parça başı 1.500 TL'ye kadar" />
+                </div>
+            </div>
+
+            <fieldset class="field" style="border: 0; padding: 0; margin: var(--space-5) 0 0">
+                <legend style="font-size: var(--text-sm); font-weight: var(--weight-medium); margin-bottom: var(--space-2)">Arama linki üretilecek mağazalar</legend>
+                <div class="checkbox-row">
+                    @foreach (var (id, name) in StoreCatalog.All)
+                    {
+                        <label><input type="checkbox" checked="@_model.Stores.Contains(id)" @onchange="e => Toggle(id, e)" /> @name</label>
+                    }
+                </div>
+            </fieldset>
+
+            <div class="field" style="margin-top: var(--space-4)">
+                <label for="notes">Notlar</label>
+                <textarea id="notes" rows="3" @bind="_model.Notes" maxlength="500" placeholder="ör. ofiste giyebileceğim parçalar istiyorum, logo sevmem"></textarea>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="button button--primary">Kaydet</button>
+            </div>
+            <div role="status" aria-live="polite">
+                @if (_saved)
+                {
+                    <p class="notice notice--success" style="margin-top: var(--space-4)">Kaydedildi.</p>
+                }
+            </div>
+        </form>
+    </section>
+
+    <section class="card" aria-labelledby="instagram-title" style="margin-top: var(--space-5)">
+        <h2 id="instagram-title">Instagram bağlantısı <span class="badge">isteğe bağlı</span></h2>
+        <p class="muted small">
+            Resmi Instagram API'si (Business Discovery) ile İşletme ve İçerik Üreticisi hesaplarının post ve reels'leri otomatik alınır.
+            Hiçbir hesaba giriş yapılmaz. Kurulum adımları: <code>docs/instagram-api-kurulum.md</code>.
+            Erişim anahtarı bu bilgisayarda şifreli saklanır ve bir daha gösterilmez.
+        </p>
+        <p>
+            Durum:
+            @if (_connectedId is null)
+            {
+                <span class="badge">Bağlı değil</span>
+            }
+            else
+            {
+                <span class="badge badge--success">Bağlı · kimlik @_connectedId</span>
+            }
+        </p>
+        <form @onsubmit="SaveInstagramAsync">
+            <div class="grid grid--2">
+                <div class="field">
+                    <label for="ig-id">Senin Instagram profesyonel hesap kimliğin</label>
+                    <input id="ig-id" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" class="mono" @bind="_igUserId" maxlength="40" placeholder="1784…" />
+                </div>
+                <div class="field">
+                    <label for="ig-token">Erişim anahtarı (access token)</label>
+                    <input id="ig-token" type="password" autocomplete="off" spellcheck="false" class="mono" @bind="_igToken" maxlength="1000" />
+                </div>
+            </div>
+            <div class="actions">
+                <button type="submit" class="button button--primary" disabled="@_igBusy">Kaydet ve test et</button>
+                @if (_connectedId is not null)
+                {
+                    <button type="button" class="button button--danger" @onclick="DisconnectInstagram">Bağlantıyı kaldır</button>
+                }
+            </div>
+            <div role="status" aria-live="polite">
+                @if (_igBusy)
+                {
+                    <p class="muted small" style="margin-top: var(--space-3)">Bağlantı test ediliyor…</p>
+                }
+                else if (_igMessage is not null)
+                {
+                    <p class="notice @(_igOk ? "notice--success" : "notice--error")" style="margin-top: var(--space-4)">@_igMessage</p>
+                }
+            </div>
+        </form>
+    </section>
+}
+
+@code {
+    private Model? _model;
+    private bool _saved;
+    private string? _connectedId;
+    private string? _igUserId;
+    private string? _igToken;
+    private string? _igMessage;
+    private bool _igOk;
+    private bool _igBusy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _connectedId = await Credentials.GetConnectedUserIdAsync(CancellationToken.None);
+        _igUserId = _connectedId;
+        var prefs = await Preferences.GetAsync(CancellationToken.None);
+        _model = new Model { Gender = prefs.Gender, Sizes = prefs.Sizes, Budget = prefs.Budget, Notes = prefs.Notes, Stores = [.. prefs.Stores] };
+    }
+
+    private void Toggle(string id, ChangeEventArgs e)
+    {
+        _saved = false;
+        if (e.Value is true)
+        {
+            _model!.Stores.Add(id);
+        }
+        else
+        {
+            _model!.Stores.Remove(id);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        await Preferences.SaveAsync(new UserPreferences(_model!.Gender, _model.Sizes, _model.Budget, [.. _model.Stores], _model.Notes), CancellationToken.None);
+        _saved = true;
+    }
+
+    private async Task SaveInstagramAsync()
+    {
+        _igMessage = null;
+        var id = _igUserId?.Trim() ?? string.Empty;
+        var token = _igToken?.Trim() ?? string.Empty;
+        if (id.Length == 0 || token.Length == 0)
+        {
+            (_igOk, _igMessage) = (false, "Kimlik ve erişim anahtarının ikisi de gerekli.");
+            return;
+        }
+
+        _igBusy = true;
+        try
+        {
+            var credentials = new InstagramCredentials(id, token);
+            var username = await Graph.TestAsync(credentials, CancellationToken.None);
+            await Credentials.SaveAsync(credentials, CancellationToken.None);
+            _connectedId = id;
+            (_igOk, _igMessage) = (true, $"Bağlandı: @{username}");
+        }
+        catch (InstagramApiException ex)
+        {
+            (_igOk, _igMessage) = (false, ex.Message);
+        }
+        finally
+        {
+            _igToken = null;
+            _igBusy = false;
+        }
+    }
+
+    private void DisconnectInstagram()
+    {
+        Credentials.Clear();
+        (_connectedId, _igOk, _igMessage) = (null, true, "Bağlantı kaldırıldı.");
+    }
+
+    private sealed class Model
+    {
+        public string? Gender { get; set; }
+
+        public string? Sizes { get; set; }
+
+        public string? Budget { get; set; }
+
+        public string? Notes { get; set; }
+
+        public HashSet<string> Stores { get; init; } = [];
+    }
+}

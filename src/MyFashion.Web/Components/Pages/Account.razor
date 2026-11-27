@@ -1,0 +1,149 @@
+@page "/accounts/{Username}"
+@inject RecommendationService Recommendations
+@inject IAnalysisReader Reader
+@inject IPreferencesStore Preferences
+
+<PageTitle>@Username · myfashion</PageTitle>
+
+<div class="page-header">
+    <h1>@Username</h1>
+    <p class="muted">Stil profili, alışveriş listesi ve kombin önerileri.</p>
+</div>
+
+@if (_error is not null)
+{
+    <ErrorState Message="@_error" OnRetry="LoadAsync" />
+}
+else if (_profile is null)
+{
+    <LoadingState Title="Profil hazırlanıyor…" />
+}
+else
+{
+    <div class="stack">
+        <ProfileReport Profile="_profile" Images="_images" />
+
+        @if (!_profile.IsEmpty)
+        {
+            <section aria-labelledby="recommendations-title" class="stack">
+                <div class="bar__label">
+                    <h2 id="recommendations-title">Sana öneriler</h2>
+                    @if (_recommendations is not null && !_generating)
+                    {
+                        <button type="button" class="button button--secondary" @onclick="GenerateAsync">Yeniden oluştur</button>
+                    }
+                </div>
+                <p class="muted small">Öneriler <a href="settings">ayarlardaki</a> bilgilerine göre hazırlanır.</p>
+
+                @if (_generating)
+                {
+                    <LoadingState Title="Öneriler hazırlanıyor…" Detail="Yerel model çalışıyor, bu 10-60 saniye sürebilir." />
+                }
+                else if (_recommendationError is not null)
+                {
+                    <ErrorState Title="Öneriler oluşturulamadı" Message="@_recommendationError" OnRetry="GenerateAsync" />
+                }
+                else if (_recommendations is null)
+                {
+                    <EmptyState Title="Henüz öneri yok" Detail="Bu profile göre bir alışveriş listesi ve kombin önerileri oluştur.">
+                        <button type="button" class="button button--primary" @onclick="GenerateAsync">Önerileri oluştur</button>
+                    </EmptyState>
+                }
+                else
+                {
+                    <RecommendationsView Value="_recommendations" />
+                }
+            </section>
+        }
+
+        @if (_runs.Count > 0)
+        {
+            <section class="card" aria-labelledby="runs-title">
+                <h2 id="runs-title">Geçmiş analizler</h2>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Tarih</th>
+                                <th scope="col">Durum</th>
+                                <th scope="col" class="num">Kıyafetli</th>
+                                <th scope="col" class="num">Elenen</th>
+                                <th scope="col" class="num">Hatalı</th>
+                                <th scope="col">Model</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var run in _runs)
+                            {
+                                <tr>
+                                    <td>@Labels.Date(run.StartedAt)</td>
+                                    <td>@Labels.Status(run.Status)@if (run.Error is not null) { <span class="muted small"> · @run.Error</span> }</td>
+                                    <td class="num">@run.Counts.Analyzed</td>
+                                    <td class="num">@run.Counts.Duplicates</td>
+                                    <td class="num">@run.Counts.Failed</td>
+                                    <td class="mono small">@run.Model</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string Username { get; set; } = string.Empty;
+
+    private StyleProfile? _profile;
+    private IReadOnlyList<AnalyzedImage> _images = [];
+    private IReadOnlyList<RunInfo> _runs = [];
+    private Recommendations? _recommendations;
+    private string? _error;
+    private string? _recommendationError;
+    private bool _generating;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        _profile = null;
+        try
+        {
+            _images = await Reader.GetImagesAsync(Username, CancellationToken.None);
+            _runs = await Reader.GetRunsAsync(Username, CancellationToken.None);
+            _profile = StyleProfileBuilder.Build(Username, _images);
+            var prefs = await Preferences.GetAsync(CancellationToken.None);
+            _recommendations = Recommendations.GetCached(_profile, prefs);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            _error = "Rapor yüklenemedi: " + ex.Message;
+        }
+    }
+
+    private async Task GenerateAsync()
+    {
+        if (_profile is null || _generating)
+        {
+            return;
+        }
+
+        _generating = true;
+        _recommendationError = null;
+        try
+        {
+            _recommendations = await Recommendations.GenerateAsync(_profile, CancellationToken.None);
+        }
+        catch (AnalysisFailedException ex)
+        {
+            _recommendationError = ex.Message;
+        }
+        finally
+        {
+            _generating = false;
+        }
+    }
+}

@@ -1,0 +1,19 @@
+<div class="state state--error" role="alert">
+    <p class="state__title">@Title</p>
+    <p class="small">@Message</p>
+    @if (OnRetry.HasDelegate)
+    {
+        <button type="button" class="button button--secondary" @onclick="OnRetry">Tekrar dene</button>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = "Bir sorun oluştu";
+
+    [Parameter, EditorRequired]
+    public string Message { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback OnRetry { get; set; }
+}

@@ -1,10 +1,17 @@
-# Kişisel fotoğraflar ve analiz çıktıları: asla GitHub'a gitmez
-data/
-output/
+# Kişisel fotoğraflar, indirilen medya ve analiz çıktıları: asla GitHub'a gitmez
+/data/
+/output/
+*.mp4
+*.mov
+
+# Instagram oturum dosyaları (yedek hesabın çerezleri): asla GitHub'a gitmez
+session-*
+*.session
 
 # Gizli ayarlar
 .env
 *.secrets.json
+appsettings.*.local.json
 
 # .NET
 bin/
@@ -22,5 +29,11 @@ TestResults/
 !.vscode/extensions.json
 .idea/
 
+# Eski, üretilmiş dokümanlar
+docs/*.pdf
+
 # macOS
 .DS_Store
+
+# Local editor/agent settings
+.claude/

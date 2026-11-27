@@ -1,0 +1,127 @@
+@page "/compare"
+@inject IAnalysisReader Reader
+
+<PageTitle>Karşılaştır · myfashion</PageTitle>
+
+<div class="page-header">
+    <h1>Karşılaştır</h1>
+    <p class="muted">İki hesabın stilini yan yana gör: ortak noktalar ve farklar.</p>
+</div>
+
+@if (_accounts is null)
+{
+    <LoadingState Title="Hesaplar yükleniyor…" />
+}
+else if (_accounts.Count < 2)
+{
+    <EmptyState Title="Karşılaştırma için en az iki hesap gerekli" Detail="Önce iki farklı hesabı analiz et.">
+        <a class="button button--secondary" href="">Analizlere dön</a>
+    </EmptyState>
+}
+else
+{
+    <div class="stack">
+        <section class="card">
+            <div class="grid grid--2">
+                <div class="field">
+                    <label for="left">Birinci hesap</label>
+                    <select id="left" @bind="_left" @bind:after="LoadAsync">
+                        <option value="">Seç…</option>
+                        @foreach (var account in _accounts)
+                        {
+                            <option value="@account.Username">@account.Username</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="right">İkinci hesap</label>
+                    <select id="right" @bind="_right" @bind:after="LoadAsync">
+                        <option value="">Seç…</option>
+                        @foreach (var account in _accounts)
+                        {
+                            <option value="@account.Username">@account.Username</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        @if (_loading)
+        {
+            <LoadingState Title="Profiller hazırlanıyor…" />
+        }
+        else if (_a is not null && _b is not null)
+        {
+            <section class="card" aria-labelledby="common-title">
+                <h2 id="common-title">Ortak noktalar</h2>
+                <p><strong>Renkler:</strong> @List(Common(_a.Palette.Take(6).Select(p => p.Color), _b.Palette.Take(6).Select(p => p.Color)))</p>
+                <p><strong>Tarz:</strong> @List(Common(_a.StyleTags.Take(5).Select(t => t.Name), _b.StyleTags.Take(5).Select(t => t.Name)))</p>
+                <p style="margin: 0"><strong>Markalar:</strong> @List(Common(_a.Brands.Select(b => b.Brand), _b.Brands.Select(b => b.Brand)))</p>
+            </section>
+            <div class="grid grid--2">
+                @foreach (var profile in new[] { _a, _b })
+                {
+                    <section class="card" aria-label="@profile.Username">
+                        <h2>@profile.Username</h2>
+                        @if (profile.IsEmpty)
+                        {
+                            <p class="muted">Bu hesapta analiz edilmiş kıyafet yok.</p>
+                        }
+                        else
+                        {
+                            <div class="palette" role="img" aria-label="@($"{profile.Username} renk paleti")" style="margin-bottom: var(--space-4)">
+                                @foreach (var color in profile.Palette)
+                                {
+                                    <div class="palette__swatch" style="flex: @color.Percent.ToString("0.#", CultureInfo.InvariantCulture); background: @color.Hex" title="@Labels.Translate(color.Color)"></div>
+                                }
+                            </div>
+                            <h3>Tarz</h3>
+                            <ShareBars Items="profile.StyleTags" Max="5" />
+                            <h3 style="margin-top: var(--space-4)">İmza parçalar</h3>
+                            <ShareBars Items="profile.SignaturePieces" Max="5" EmptyText="Tekrar eden parça yok." />
+                        }
+                    </section>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<AccountOverview>? _accounts;
+    private string? _left;
+    private string? _right;
+    private StyleProfile? _a;
+    private StyleProfile? _b;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _accounts = await Reader.GetAccountsAsync(CancellationToken.None);
+        if (_accounts.Count >= 2)
+        {
+            (_left, _right) = (_accounts[0].Username, _accounts[1].Username);
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _a = _b = null;
+        if (string.IsNullOrEmpty(_left) || string.IsNullOrEmpty(_right))
+        {
+            return;
+        }
+
+        _loading = true;
+        _a = StyleProfileBuilder.Build(_left, await Reader.GetImagesAsync(_left, CancellationToken.None));
+        _b = StyleProfileBuilder.Build(_right, await Reader.GetImagesAsync(_right, CancellationToken.None));
+        _loading = false;
+    }
+
+    private static List<string> Common(IEnumerable<string> a, IEnumerable<string> b) =>
+        [.. a.Intersect(b, StringComparer.OrdinalIgnoreCase)];
+
+    private static string List(List<string> items) =>
+        items.Count == 0 ? "yok" : string.Join(", ", items.Select(Labels.Translate));
+}

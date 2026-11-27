@@ -1,0 +1,16 @@
+﻿@page "/Error"
+@attribute [ExcludeFromInteractiveRouting]
+@using System.Diagnostics
+
+<PageTitle>Hata · myfashion</PageTitle>
+
+<ErrorState Title="Beklenmeyen bir hata oluştu" Message="@Message" />
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    // The request id helps find the entry in the logs; exception details are never shown to the browser.
+    private string Message =>
+        $"Sayfayı yenilemeyi dene. Sorun sürerse kayıtlarda şu kimliği ara: {Activity.Current?.Id ?? HttpContext?.TraceIdentifier ?? "-"}";
+}

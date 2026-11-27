@@ -1,0 +1,9 @@
+<Project>
+  <!-- Central package versions: every NuGet version lives here and only here. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15" />
+    <PackageVersion Include="xunit.v3" Version="4.0.3" />
+    <PackageVersion Include="bunit" Version="2.15.2" />
+  </ItemGroup>
+</Project>

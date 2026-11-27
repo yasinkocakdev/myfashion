@@ -1,0 +1,16 @@
+<div class="state" role="status" aria-live="polite" aria-busy="true">
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="state__title">@Title</p>
+    @if (!string.IsNullOrEmpty(Detail))
+    {
+        <p class="small">@Detail</p>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = "Yükleniyor…";
+
+    [Parameter]
+    public string? Detail { get; set; }
+}
