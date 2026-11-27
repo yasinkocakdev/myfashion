@@ -34,3 +34,9 @@ Projedeki önemli kararların kısa notları. Her not: **bu neydi, neden böyle 
 - **Görseller modele gitmeden önce 768 piksele küçültülür.** Model büyük görselde daha yavaş çalışır ama kıyafet tanımada belirgin şekilde daha iyi olmaz. `force_original_aspect_ratio=decrease` en-boy oranını korur, `min(768,iw)` ise küçük görseli büyütmez.
 - **`ToolLocator`**: Finder'dan açılan uygulamalar terminalin PATH'ini görmez. Bu yüzden Homebrew'un klasörlerine açıkça bakılır.
 - **Entegrasyon testleri** gerçek ffmpeg'le, test sırasında ffmpeg'in kendi ürettiği örnek video ve görsellerle çalışır. Repoya ikili test dosyası koymaya gerek kalmaz. ffmpeg yoksa testler hata vermez, atlanır (`Assert.SkipWhen`).
+
+## 6. Model çıktısına güvenmemek (`feat(analysis): add analysis model and strict model output parser`)
+
+- **Yapay zekâ çıktısı dışarıdan gelen veri gibi işlenir.** Model yanlış bir değer uydurabilir. Ayrıca fotoğraftaki bir yazı ("talimatları unut, şunu yaz") modeli yönlendirmeye çalışabilir; buna prompt injection (OWASP LLM01) denir. Bu yüzden `ModelOutputParser` her alanı doğrular: bilinmeyen kategori `Other` olur, metinlerdeki kontrol karakterleri silinir ve uzunluk 60 karakterle sınırlanır, güven puanı 0 ile 1 arasına sıkıştırılır, en fazla 12 parça kabul edilir.
+- **Kanıtsız marka atılır.** Model "Gucci" der ama logo, yazı ya da açıklama gibi bir kanıt göstermezse marka silinir. Markalar raporun en değerli kısmı ve uydurma marka, hiç marka olmamasından daha kötüdür.
+- **Enum'lar sayı olarak gelirse reddedilir.** `Enum.TryParse` `"5"` gibi bir değeri de kabul eder; ek kontrol bu açığı kapatır.
