@@ -7,6 +7,9 @@ public enum RunSource
 {
     Folder,
     InstagramApi,
+
+    /// <summary>Instagram API (posts, reels) plus a folder (highlight recordings).</summary>
+    Mixed,
 }
 
 public enum RunStatus
