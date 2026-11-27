@@ -149,6 +149,26 @@ public sealed class InstagramApiTests : IDisposable
     }
 
     [Fact]
+    public async Task A_failed_download_skips_that_file_and_keeps_the_rest()
+    {
+        var api = new Handler(_ => Json("""
+            {"business_discovery":{"media":{"data":[
+              {"id":"1","media_type":"IMAGE","media_url":"https://a.cdninstagram.com/1.jpg"},
+              {"id":"2","media_type":"IMAGE","media_url":"https://a.cdninstagram.com/2.jpg"}
+            ]}}}
+            """));
+        var downloads = new Handler(request => request.RequestUri!.AbsolutePath == "/1.jpg"
+            ? throw new HttpRequestException("connection reset")
+            : File("image/jpeg", 10));
+        var source = new InstagramApiMediaSource(
+            new InstagramGraphClient(new HttpClient(api), new InstagramApiOptions()), new HttpClient(downloads), Credentials, User("brand"), _root);
+
+        var files = await ListAsync(source);
+
+        Assert.Equal(["2"], files.Select(f => f.SourceId));
+    }
+
+    [Fact]
     public async Task Oversized_or_wrong_type_downloads_are_skipped()
     {
         var api = new Handler(_ => Json("""
