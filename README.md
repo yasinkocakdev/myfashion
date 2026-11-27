@@ -6,7 +6,7 @@ Kıyafet fotoğraflarından **stil profili** çıkaran, bunu alışveriş listes
 
 ## Hangi problemi çözüyor?
 
-Beğendiğin bir tarzı (bir hesabın paylaşımlarını, kaydettiğin fotoğrafları) incelemek için yüzlerce fotoğrafa tek tek bakmak gerekir. stil-analizi bu fotoğrafları analiz eder ve şunları çıkarır:
+Beğendiğin bir tarzı (bir hesabın paylaşımlarını, kaydettiğin fotoğrafları) incelemek için yüzlerce fotoğrafa tek tek bakmak gerekir. myfashion bu fotoğrafları analiz eder ve şunları çıkarır:
 
 - **Stil profili:** Renk paleti, en sık giyilen parçalar, görünen markalar, tekrar eden kombin formülleri.
 - **Alışveriş listesi:** Bu tarzı yakalamak için alınabilecek parçalar.
@@ -25,7 +25,7 @@ Beğendiğin bir tarzı (bir hesabın paylaşımlarını, kaydettiğin fotoğraf
 
 ## Yol haritası
 
-- [x] Fikir ve tasarım ([docs/tasarim-taslagi.md](docs/tasarim-taslagi.md))
+- [x] Fikir ve tasarım ([docs/tasarim.md](docs/tasarim.md))
 - [ ] 1. ay: Konsol uygulaması, elle yazılmış veriden stil istatistiği
 - [ ] 2. ay: Çekirdek kütüphane, modeller, testler
 - [ ] 3. ay: Lokal yapay zekâyla gerçek fotoğraf analizi
@@ -33,7 +33,7 @@ Beğendiğin bir tarzı (bir hesabın paylaşımlarını, kaydettiğin fotoğraf
 - [ ] 5. ay: Yüksek kalite modu ve güvenlik
 - [ ] 6. ay: Windows ve macOS için indirilebilir sürüm
 
-Gün gün plan: [docs/gunluk-plan.md](docs/gunluk-plan.md)
+Uygulama planı: [docs/superpowers/plans/2026-11-27-myfashion-mvp.md](docs/superpowers/plans/2026-11-27-myfashion-mvp.md)
 
 ## Nasıl çalıştırılır?
 
