@@ -4,7 +4,7 @@
 
 **Tasarım:** [docs/tasarim.md](../../tasarim.md)
 
-**Çalışma kuralları:** `improve/mvp` dalı; her mantıklı değişiklik ayrı commit (Conventional Commits); her adımda build ve test yeşil olmadan commit yok; force push yok; gizli bilgi commitlenmez. Yeni kütüphane, şema değişikliği ve modül yeniden yazımı için onay alınır (onaylananlar: xUnit v3, bUnit, EF Core SQLite; Ollama, instaloader, qwen3-vl).
+**Çalışma kuralları:** `improve/mvp` dalı; her mantıklı değişiklik ayrı commit (Conventional Commits); her adımda build ve test yeşil olmadan commit yok; force push yok; gizli bilgi commitlenmez. Yeni kütüphane, şema değişikliği ve modül yeniden yazımı için onay alınır (onaylananlar: xUnit v3, bUnit, EF Core SQLite; Ollama, qwen3-vl).
 
 ## Genel kısıtlar
 
@@ -16,7 +16,7 @@
 ## İnceleme odağı (testlerle sabitlenecek riskler)
 
 1. Gizli, var olmayan ya da geçersiz hesap linki → anlaşılır hata, çökme yok (Görev 3).
-2. İndirme sırasında Instagram engeli (checkpoint, 401, 429) → indirme durur, o ana kadarki medya analiz edilebilir (Görev 3).
+2. API hız sınırı, süresi dolmuş anahtar ya da İşletme/Creator olmayan hedef hesap → çekme durur, anlaşılır mesaj, o ana kadarki medya analiz edilebilir (Görev 3).
 3. İçinde kıyafet olmayan kare ya da modelin bozuk JSON döndürmesi → kare atlanır, akış devam eder (Görev 5).
 4. Türkçe karakterli ya da boşluklu dosya yolları → doğru işlenir (Görev 4).
 5. İşin yarıda iptal edilmesi → yarım sonuçlar tutarlı kalır, tekrar başlatınca önbellekten devam eder (Görev 6).
@@ -27,7 +27,7 @@
 |---|-------|----------|------|
 | 1 | Solution iskeleti ve kalite kapısı (CI dahil) | `MyFashion.slnx`, `Directory.Build.props`, `src/*`, `tests/*`, `.github/workflows/ci.yml` | `dotnet build` 0 uyarı, `dotnet test` yeşil |
 | 2 | Core modelleri ve saf yardımcılar: `InstagramProfileLink`, `PathGuard`, renk normalleştirme | `src/MyFashion.Core/*` | Birim testleri (geçerli/geçersiz linkler, enjeksiyon girdileri, traversal) |
-| 3 | Süreç çalıştırıcı ve Instagram kaynağı (yedek hesap oturumu, girişsiz mod, engel tespiti) + manuel klasör kaynağı | `Infrastructure/Processes`, `Infrastructure/Instagram`, `Infrastructure/Media/FolderMediaSource.cs` | Sahte süreçle runner testleri, engel çıktısı tespiti, manuel klasör taraması |
+| 3 | Manuel klasör kaynağı (ekran kaydı, ekran görüntüsü) ve Instagram Graph API kaynağı (Business Discovery, sayfalama, hata kodları, şifreli anahtar saklama) | `Infrastructure/Media/FolderMediaSource.cs`, `Infrastructure/Instagram/*` | Klasör taraması (Türkçe yol, desteklenmeyen dosya), sahte `HttpMessageHandler` ile API yanıtları: sayfalama, hız sınırı, yetki hatası, Creator olmayan hesap |
 | 4 | Ön işleme: ffmpeg ile kare çıkarma, küçültme, dHash, benzer kare eleme | `Infrastructure/Media/*`, `Core/Media/DHash.cs` | Üretilmiş test videosu ve görselleriyle kare sayısı, Hamming mesafesi, Türkçe yol |
 | 5 | Ollama istemcisi ve görsel analizi (JSON şema, doğrulama, zaman aşımı, yeniden deneme) | `Infrastructure/Ollama/*`, `Core/Analysis/*` | Sahte `HttpMessageHandler` ile geçerli, bozuk, zaman aşımı yanıtları; Ollama varsa entegrasyon testi |
 | 6 | SQLite kalıcılığı ve `AnalysisRunner` akışı (önbellek, iptal, ilerleme) | `Infrastructure/Data/*`, `Core/Application/AnalysisRunner.cs` | In-memory SQLite, sahte kaynak/analizcilerle uçtan uca akış, iptal ve devam testleri |
