@@ -63,3 +63,10 @@ Projedeki önemli kararların kısa notları. Her not: **bu neydi, neden böyle 
 - **`IDbContextFactory` ile her işlem için yeni bir DbContext:** DbContext thread-safe değildir. Analiz arka planda çalışırken arayüz de veriyi okuyacak; her çağrının kendi context'i olması çakışmayı önler.
 - **Testler gerçek SQLite'la çalışır** (bellekte, `:memory:`). EF Core'un "InMemory" sağlayıcısı ilişkileri ve kısıtları gerçek bir veritabanı gibi uygulamadığı için yanıltıcı olabilir.
 - **Ders:** `.gitignore`'daki `data/` kuralı macOS'ta (büyük-küçük harf duyarsız) `Data/` kod klasörünü de gizledi. Kökteki klasörleri `/data/` diye sabitlemek gerekiyor. `git status`'a her commit öncesi bakmak bu yüzden önemli.
+
+## 10. Özet motoru (`feat(profile): build style profiles from analyzed images`)
+
+- **`StyleProfileBuilder` saf bir fonksiyondur:** Aynı girdi hep aynı çıktıyı verir; veritabanına, dosyaya ya da modele dokunmaz. Bu yüzden en kritik iş mantığı olduğu hâlde testi en kolay parça bu. LINQ'in `GroupBy`, `OrderByDescending`, `ThenBy` zinciri burada istatistik çıkarmanın ana aracı.
+- **Eşitlik bozulmalarında `ThenBy`:** İki renk aynı sayıda geçiyorsa sıra rastgele olmasın diye ikinci bir sıralama ölçütü (isim) eklenir. Böylece rapor her açılışta aynı görünür, testler de kararlı olur.
+- **Gürültü filtresi:** Güveni 0.3'ün altındaki parçalar sayılmaz. İmza parça için en az 2 tekrar, kombin formülü için en az 2 görsel gerekir. Tek seferlik bir şey "tarz" değildir.
+- **Kombin formülü** bir görseldeki ana parçaların (dış giyim, üst, elbise, alt, ayakkabı) renk ve kategori dizisidir; örneğin "black top + denim bottom + white footwear". Aksesuarlar formüle girmez, yoksa her şapka yeni bir formül yaratırdı.
