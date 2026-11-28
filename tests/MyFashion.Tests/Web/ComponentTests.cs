@@ -101,6 +101,17 @@ public sealed class ComponentTests : BunitContext
     }
 
     [Fact]
+    public void JobProgressView_explains_a_run_that_found_no_files()
+    {
+        var job = new AnalysisJob(Guid.NewGuid(), "hesap", "/bos", false, JobStatus.Completed, DateTimeOffset.UtcNow,
+            new RunProgress(1, "Tamamlandı", new RunCounts(0, 0, 0, 0, 0, 0, 0), null), 1);
+
+        var cut = Render<JobProgressView>(p => p.Add(x => x.Job, job));
+
+        Assert.Contains("Hiç dosya işlenmedi", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void JobProgressView_shows_live_status_while_running()
     {
         var job = new AnalysisJob(Guid.NewGuid(), "hesap", "/klasör", true, JobStatus.Running, DateTimeOffset.UtcNow,

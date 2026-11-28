@@ -80,6 +80,18 @@ public sealed class FolderMediaSourceTests : IDisposable
     }
 
     [Fact]
+    public void ContainsMedia_reports_whether_supported_files_exist()
+    {
+        Assert.False(FolderMediaSource.ContainsMedia(_root));
+        Touch("notes.txt");
+        Touch("empty.jpg", bytes: 0);
+        Assert.False(FolderMediaSource.ContainsMedia(_root));
+        Touch("highlights/kayit.mov");
+        Assert.True(FolderMediaSource.ContainsMedia(_root));
+        Assert.False(FolderMediaSource.ContainsMedia(Path.Combine(_root, "yok")));
+    }
+
+    [Fact]
     public async Task Missing_folder_throws_a_clear_error()
     {
         var source = new FolderMediaSource(Path.Combine(_root, "does-not-exist"));

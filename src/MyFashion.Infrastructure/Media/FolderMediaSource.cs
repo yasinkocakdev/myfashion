@@ -41,6 +41,13 @@ public sealed class FolderMediaSource(string folder) : IMediaSource
         await Task.CompletedTask.ConfigureAwait(false);
     }
 
+    /// <summary>True if the folder (or a sub-folder) contains at least one supported image or video.</summary>
+    public static bool ContainsMedia(string folder)
+    {
+        var root = Path.GetFullPath(folder);
+        return Directory.Exists(root) && EnumerateFiles(root).Any();
+    }
+
     private static IEnumerable<string> EnumerateFiles(string root)
     {
         var pending = new Stack<DirectoryInfo>();

@@ -4,6 +4,7 @@
 @inject IAnalysisReader Reader
 @inject AnalysisJobService Jobs
 @inject SystemCheck Checker
+@using MyFashion.Infrastructure.Media
 @inject InstagramCredentialStore Credentials
 @inject NavigationManager Navigation
 
@@ -151,6 +152,9 @@
         Jobs.Changed += OnJobChanged;
         _recentJobs = Jobs.Recent();
         _apiConnected = await Credentials.GetConnectedUserIdAsync(CancellationToken.None) is not null;
+        // With the API connected, posts and reels come from the API; the folder is only needed for highlight recordings.
+        _useApi = _apiConnected;
+        _useFolder = !_apiConnected;
         await Task.WhenAll(LoadAccountsAsync(), CheckSystemAsync());
     }
 
@@ -201,6 +205,10 @@
         else if (!Directory.Exists(folder))
         {
             _folderError = "Bu klasör bulunamadı.";
+        }
+        else if (!FolderMediaSource.ContainsMedia(folder))
+        {
+            _folderError = "Bu klasörde desteklenen fotoğraf ya da video yok (jpg, png, webp, heic, mp4, mov). Alt klasörlere de bakıldı.";
         }
 
         if (_accountError is not null || _folderError is not null || _sourceError is not null || username is null)

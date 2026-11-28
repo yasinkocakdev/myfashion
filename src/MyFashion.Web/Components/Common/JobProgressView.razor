@@ -44,6 +44,14 @@
         </dl>
     }
 
+    @if (Job.Status == JobStatus.Completed && (counts?.MediaFiles ?? 0) == 0)
+    {
+        <div class="notice notice--warning" role="status" style="margin-top: var(--space-4)">
+            Hiç dosya işlenmedi. Klasör boş olabilir ya da desteklenmeyen dosyalar içeriyor olabilir.
+            Instagram API'yi kullanmak için analizi başlatırken <strong>Post ve reels: Instagram API</strong> kutusunu işaretle.
+        </div>
+    }
+
     @if (Job.Status == JobStatus.Failed)
     {
         <div class="notice notice--error" role="alert" style="margin-top: var(--space-4)">@Job.Error</div>
